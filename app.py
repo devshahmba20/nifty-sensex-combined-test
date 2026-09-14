@@ -19,10 +19,7 @@ st.markdown("""
 .section-title{font-size:21px;font-weight:750;margin-top:10px;margin-bottom:8px}
 .formula-box{padding:14px 16px;border-radius:12px;background:#f6f7fb;border:1px solid #e5e7eb;font-family:monospace;font-size:15px}
 div[data-testid="stMetric"]{padding:12px 14px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.04)}
-div[data-testid="stDataFrame"]{border-radius:12px;overflow:hidden}
 </style>
-<div class="main-title">NIFTY × SENSEX Strategy Tester</div>
-<div class="subtitle">Historical straddle analytics • Expiry comparison • India VIX • Backtesting</div>
 """, unsafe_allow_html=True)
 
 if not os.path.exists(DB_PATH):
@@ -145,6 +142,20 @@ def run_backtest(dates,n_exp,s_exp,multiplier):
 
 
 
+
+# -----------------------------
+# SIDEBAR NAVIGATION
+# -----------------------------
+st.sidebar.markdown("## 📊 NIFTY × SENSEX")
+page = st.sidebar.radio(
+    "Open section",
+    ["🎯 Strategy Tester", "📈 Individual Straddle"],
+    index=0,
+    key="page_nav",
+)
+st.sidebar.divider()
+st.sidebar.caption("Click a section above. Only the selected section is shown.")
+
 # -----------------------------
 # DATE / EXPIRY SELECTION
 # -----------------------------
@@ -176,180 +187,183 @@ with e2: sensex_exp=st.selectbox("SENSEX Expiry",s_expiries,key="main_s_exp")
 
 n,s,vix,_=calculate_day(selected_date,nifty_exp,sensex_exp,3.30)
 
-# -----------------------------
-# MAIN STRATEGY TESTER
-# -----------------------------
-st.markdown('<div class="section-title">🎯 NIFTY × SENSEX Strategy Tester</div>', unsafe_allow_html=True)
-st.caption("Existing strategy logic is kept unchanged. The Individual Straddle Analysis is added separately below.")
+if page == "🎯 Strategy Tester":
+    # -----------------------------
+    # MAIN STRATEGY TESTER
+    # -----------------------------
+    st.markdown('<div class="section-title">🎯 NIFTY × SENSEX Strategy Tester</div>', unsafe_allow_html=True)
+    st.caption("Existing strategy logic is kept unchanged. The Individual Straddle Analysis is added separately below.")
 
-multiplier = st.number_input("NIFTY Multiplier", min_value=0.0, value=3.30, step=0.05, format="%.2f", key="main_multiplier")
-final_value = s["straddle"] - (n["straddle"] * multiplier) if np.isfinite(s["straddle"]) and np.isfinite(n["straddle"]) else np.nan
+    multiplier = st.number_input("NIFTY Multiplier", min_value=0.0, value=3.30, step=0.05, format="%.2f", key="main_multiplier")
+    final_value = s["straddle"] - (n["straddle"] * multiplier) if np.isfinite(s["straddle"]) and np.isfinite(n["straddle"]) else np.nan
 
-st.caption("Selected setup: NIFTY " + str(nifty_exp) + " • SENSEX " + str(sensex_exp) + " • Multiplier " + f"{multiplier:.2f}")
-a,b,c,d,e=st.columns(5)
-a.metric("India VIX", f"{vix:.2f}" if np.isfinite(vix) else "N/A")
-b.metric("NIFTY Straddle", f"{n['straddle']:.2f}" if np.isfinite(n['straddle']) else "N/A")
-c.metric("Adjusted NIFTY", f"{n['straddle']*multiplier:.2f}" if np.isfinite(n['straddle']) else "N/A")
-d.metric("SENSEX Straddle", f"{s['straddle']:.2f}" if np.isfinite(s['straddle']) else "N/A")
-e.metric("STRATEGY VALUE", f"{final_value:.2f}" if np.isfinite(final_value) else "N/A")
+    st.caption("Selected setup: NIFTY " + str(nifty_exp) + " • SENSEX " + str(sensex_exp) + " • Multiplier " + f"{multiplier:.2f}")
+    a,b,c,d,e=st.columns(5)
+    a.metric("India VIX", f"{vix:.2f}" if np.isfinite(vix) else "N/A")
+    b.metric("NIFTY Straddle", f"{n['straddle']:.2f}" if np.isfinite(n['straddle']) else "N/A")
+    c.metric("Adjusted NIFTY", f"{n['straddle']*multiplier:.2f}" if np.isfinite(n['straddle']) else "N/A")
+    d.metric("SENSEX Straddle", f"{s['straddle']:.2f}" if np.isfinite(s['straddle']) else "N/A")
+    e.metric("STRATEGY VALUE", f"{final_value:.2f}" if np.isfinite(final_value) else "N/A")
 
-st.divider()
-st.markdown('<div class="section-title">🔍 Locked Straddle Calculation</div>', unsafe_allow_html=True)
-l,r=st.columns(2)
-with l:
-    st.subheader("NIFTY")
-    st.dataframe(pd.DataFrame([{
-        "Spot":n['spot'],"Provisional ATM":n['provisional_atm'],"ATM CE Close":n['atm_ce'],"ATM PE Close":n['atm_pe'],
-        "Synthetic Future":n['synthetic_future'],"Final Strike":n['final_strike'],"Final CE Close":n['final_ce'],"Final PE Close":n['final_pe'],
-        "Straddle":n['straddle'],"Status":n['status']
-    }]),use_container_width=True,hide_index=True)
-with r:
-    st.subheader("SENSEX")
-    st.dataframe(pd.DataFrame([{
-        "Spot":s['spot'],"Provisional ATM":s['provisional_atm'],"ATM CE Close":s['atm_ce'],"ATM PE Close":s['atm_pe'],
-        "Synthetic Future":s['synthetic_future'],"Final Strike":s['final_strike'],"Final CE Close":s['final_ce'],"Final PE Close":s['final_pe'],
-        "Straddle":s['straddle'],"Status":s['status']
-    }]),use_container_width=True,hide_index=True)
+    st.divider()
+    st.markdown('<div class="section-title">🔍 Locked Straddle Calculation</div>', unsafe_allow_html=True)
+    l,r=st.columns(2)
+    with l:
+        st.subheader("NIFTY")
+        st.dataframe(pd.DataFrame([{
+            "Spot":n['spot'],"Provisional ATM":n['provisional_atm'],"ATM CE Close":n['atm_ce'],"ATM PE Close":n['atm_pe'],
+            "Synthetic Future":n['synthetic_future'],"Final Strike":n['final_strike'],"Final CE Close":n['final_ce'],"Final PE Close":n['final_pe'],
+            "Straddle":n['straddle'],"Status":n['status']
+        }]),use_container_width=True,hide_index=True)
+    with r:
+        st.subheader("SENSEX")
+        st.dataframe(pd.DataFrame([{
+            "Spot":s['spot'],"Provisional ATM":s['provisional_atm'],"ATM CE Close":s['atm_ce'],"ATM PE Close":s['atm_pe'],
+            "Synthetic Future":s['synthetic_future'],"Final Strike":s['final_strike'],"Final CE Close":s['final_ce'],"Final PE Close":s['final_pe'],
+            "Straddle":s['straddle'],"Status":s['status']
+        }]),use_container_width=True,hide_index=True)
 
-st.info(f"Final Value = {s['straddle']:.2f} − ({n['straddle']:.2f} × {multiplier:.2f}) = {final_value:.2f}" if np.isfinite(final_value) else "Final Value could not be calculated for this selection.")
+    st.info(f"Final Value = {s['straddle']:.2f} − ({n['straddle']:.2f} × {multiplier:.2f}) = {final_value:.2f}" if np.isfinite(final_value) else "Final Value could not be calculated for this selection.")
 
-# -----------------------------
-# BACKTEST
-# -----------------------------
-st.divider()
-st.markdown('<div class="section-title">📊 Expiry Combination Backtest</div>', unsafe_allow_html=True)
-st.write("Choose an expiry pair and the selected date range. Only dates inside the range are processed.")
-bt1,bt2=st.columns(2)
-with bt1: bt_nifty_exp=st.selectbox("Backtest NIFTY Expiry",n_expiries,key="bt_n")
-with bt2: bt_sensex_exp=st.selectbox("Backtest SENSEX Expiry",s_expiries,key="bt_s")
-run=st.button("Run Backtest",type="primary",key="main_backtest")
-st.caption(f"Selected range: {start_date} → {end_date} | {len(view_dates)} common trading days")
+    # -----------------------------
+    # BACKTEST
+    # -----------------------------
+    st.divider()
+    st.markdown('<div class="section-title">📊 Expiry Combination Backtest</div>', unsafe_allow_html=True)
+    st.write("Choose an expiry pair and the selected date range. Only dates inside the range are processed.")
+    bt1,bt2=st.columns(2)
+    with bt1: bt_nifty_exp=st.selectbox("Backtest NIFTY Expiry",n_expiries,key="bt_n")
+    with bt2: bt_sensex_exp=st.selectbox("Backtest SENSEX Expiry",s_expiries,key="bt_s")
+    run=st.button("Run Backtest",type="primary",key="main_backtest")
+    st.caption(f"Selected range: {start_date} → {end_date} | {len(view_dates)} common trading days")
 
-if run:
-    with st.spinner(f"Calculating {len(view_dates)} trading days..."):
-        bt=run_backtest(view_dates,bt_nifty_exp,bt_sensex_exp,multiplier)
-    if bt.empty:
-        st.error("No matching historical rows were found for this expiry combination.")
-    else:
-        q1,q2,q3,q4=st.columns(4)
-        q1.metric("Days",len(bt)); q2.metric("Average",f"{bt['Final Value'].mean():.2f}"); q3.metric("Maximum",f"{bt['Final Value'].max():.2f}"); q4.metric("Minimum",f"{bt['Final Value'].min():.2f}")
-        st.subheader("Final Strategy Value")
-        st.line_chart(bt.set_index("Date")[["Final Value"]],use_container_width=True)
-        st.subheader("Backtest Data")
-        st.dataframe(bt,use_container_width=True,hide_index=True)
-        st.download_button("Download Backtest CSV",bt.to_csv(index=False).encode("utf-8"),"strategy_backtest.csv","text/csv")
+    if run:
+        with st.spinner(f"Calculating {len(view_dates)} trading days..."):
+            bt=run_backtest(view_dates,bt_nifty_exp,bt_sensex_exp,multiplier)
+        if bt.empty:
+            st.error("No matching historical rows were found for this expiry combination.")
+        else:
+            q1,q2,q3,q4=st.columns(4)
+            q1.metric("Days",len(bt)); q2.metric("Average",f"{bt['Final Value'].mean():.2f}"); q3.metric("Maximum",f"{bt['Final Value'].max():.2f}"); q4.metric("Minimum",f"{bt['Final Value'].min():.2f}")
+            st.subheader("Final Strategy Value")
+            st.line_chart(bt.set_index("Date")[["Final Value"]],use_container_width=True)
+            st.subheader("Backtest Data")
+            st.dataframe(bt,use_container_width=True,hide_index=True)
+            st.download_button("Download Backtest CSV",bt.to_csv(index=False).encode("utf-8"),"strategy_backtest.csv","text/csv")
 
-# -----------------------------
-# INDIVIDUAL STRADDLE ANALYSIS
-# -----------------------------
-st.divider()
-st.markdown('<div class="main-title">Individual NIFTY × SENSEX Straddle</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">Separate analysis section • Same locked calculation and same cloud database</div>', unsafe_allow_html=True)
 
-# Key market values: Spot + Synthetic Future
-st.markdown('<div class="section-title">📊 Spot & Synthetic Future</div>',unsafe_allow_html=True)
-k1,k2,k3,k4=st.columns(4)
-with k1:
-    st.metric("NIFTY Spot",f"{n['spot']:.2f}" if np.isfinite(n['spot']) else "N/A")
-with k2:
-    st.metric("NIFTY Synthetic Future",f"{n['synthetic_future']:.2f}" if np.isfinite(n['synthetic_future']) else "N/A")
-with k3:
-    st.metric("SENSEX Spot",f"{s['spot']:.2f}" if np.isfinite(s['spot']) else "N/A")
-with k4:
-    st.metric("SENSEX Synthetic Future",f"{s['synthetic_future']:.2f}" if np.isfinite(s['synthetic_future']) else "N/A")
-
-st.markdown('<div class="section-title">💰 Individual Straddle</div>',unsafe_allow_html=True)
-m1,m2=st.columns(2)
-with m1:
-    st.metric("NIFTY Individual Straddle",f"{n['straddle']:.2f}" if np.isfinite(n['straddle']) else "N/A")
-    st.caption(f"Expiry: {nifty_exp} | Final Strike: {n['final_strike']}" if np.isfinite(n['final_strike']) else f"Expiry: {nifty_exp}")
-with m2:
-    st.metric("SENSEX Individual Straddle",f"{s['straddle']:.2f}" if np.isfinite(s['straddle']) else "N/A")
-    st.caption(f"Expiry: {sensex_exp} | Final Strike: {s['final_strike']}" if np.isfinite(s['final_strike']) else f"Expiry: {sensex_exp}")
-
-st.divider()
-st.markdown('<div class="section-title">🔍 Calculation Details</div>',unsafe_allow_html=True)
-l,r=st.columns(2)
-with l:
-    st.subheader("NIFTY")
-    st.dataframe(pd.DataFrame([{"Spot":n['spot'],"Provisional ATM":n['provisional_atm'],"ATM CE":n['atm_ce'],"ATM PE":n['atm_pe'],"Synthetic Future":n['synthetic_future'],"Final Strike":n['final_strike'],"Final CE":n['final_ce'],"Final PE":n['final_pe'],"Straddle":n['straddle'],"Status":n['status']}]),use_container_width=True,hide_index=True)
-with r:
-    st.subheader("SENSEX")
-    st.dataframe(pd.DataFrame([{"Spot":s['spot'],"Provisional ATM":s['provisional_atm'],"ATM CE":s['atm_ce'],"ATM PE":s['atm_pe'],"Synthetic Future":s['synthetic_future'],"Final Strike":s['final_strike'],"Final CE":s['final_ce'],"Final PE":s['final_pe'],"Straddle":s['straddle'],"Status":s['status']}]),use_container_width=True,hide_index=True)
-
-@st.cache_data(show_spinner=False)
-def individual_range(dates_range,n_exp,s_exp):
-    rows=[]
-    for dt in dates_range:
-        try:
-            n,s,vix,_=calculate_day(dt,n_exp,s_exp,3.30)
-            if np.isfinite(n['straddle']) and np.isfinite(s['straddle']):
-                rows.append({
-                    'Date':dt,
-                    'India VIX':vix,
-                    'NIFTY Spot':n['spot'],
-                    'NIFTY Synthetic Future':n['synthetic_future'],
-                    'NIFTY Final Strike':n['final_strike'],
-                    'NIFTY Straddle':n['straddle'],
-                    'SENSEX Spot':s['spot'],
-                    'SENSEX Synthetic Future':s['synthetic_future'],
-                    'SENSEX Final Strike':s['final_strike'],
-                    'SENSEX Straddle':s['straddle']
-                })
-        except Exception: continue
-    return pd.DataFrame(rows)
-
-st.divider()
-st.markdown('<div class="section-title">📈 Date-wise Individual Straddle</div>',unsafe_allow_html=True)
-ind=individual_range(view_dates,nifty_exp,sensex_exp)
-if ind.empty:
-    st.warning("Selected range માટે બંને individual straddlesનો usable data મળ્યો નથી.")
 else:
-    st.line_chart(ind.set_index('Date')[['NIFTY Straddle','SENSEX Straddle']],use_container_width=True)
+    # -----------------------------
+    # INDIVIDUAL STRADDLE ANALYSIS
+    # -----------------------------
+    st.divider()
+    st.markdown('<div class="main-title">Individual NIFTY × SENSEX Straddle</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Separate analysis section • Same locked calculation and same cloud database</div>', unsafe_allow_html=True)
 
-    # Flexible, full-width date-wise table with light visual grouping.
-    def style_result_table(df):
-        sty = df.style
-        nifty_cols = ['NIFTY Spot','NIFTY Synthetic Future','NIFTY Final Strike','NIFTY Straddle']
-        sensex_cols = ['SENSEX Spot','SENSEX Synthetic Future','SENSEX Final Strike','SENSEX Straddle']
-        vix_cols = ['India VIX']
+    # Key market values: Spot + Synthetic Future
+    st.markdown('<div class="section-title">📊 Spot & Synthetic Future</div>',unsafe_allow_html=True)
+    k1,k2,k3,k4=st.columns(4)
+    with k1:
+        st.metric("NIFTY Spot",f"{n['spot']:.2f}" if np.isfinite(n['spot']) else "N/A")
+    with k2:
+        st.metric("NIFTY Synthetic Future",f"{n['synthetic_future']:.2f}" if np.isfinite(n['synthetic_future']) else "N/A")
+    with k3:
+        st.metric("SENSEX Spot",f"{s['spot']:.2f}" if np.isfinite(s['spot']) else "N/A")
+    with k4:
+        st.metric("SENSEX Synthetic Future",f"{s['synthetic_future']:.2f}" if np.isfinite(s['synthetic_future']) else "N/A")
 
-        for c in nifty_cols:
-            if c in df.columns:
-                sty = sty.set_properties(subset=[c], **{'background-color':'#eef6ff'})
-        for c in sensex_cols:
-            if c in df.columns:
-                sty = sty.set_properties(subset=[c], **{'background-color':'#eefbf2'})
-        for c in vix_cols:
-            if c in df.columns:
-                sty = sty.set_properties(subset=[c], **{'background-color':'#f7f7f7'})
-        if 'Date' in df.columns:
-            sty = sty.set_properties(subset=['Date'], **{'font-weight':'600'})
-        return sty
+    st.markdown('<div class="section-title">💰 Individual Straddle</div>',unsafe_allow_html=True)
+    m1,m2=st.columns(2)
+    with m1:
+        st.metric("NIFTY Individual Straddle",f"{n['straddle']:.2f}" if np.isfinite(n['straddle']) else "N/A")
+        st.caption(f"Expiry: {nifty_exp} | Final Strike: {n['final_strike']}" if np.isfinite(n['final_strike']) else f"Expiry: {nifty_exp}")
+    with m2:
+        st.metric("SENSEX Individual Straddle",f"{s['straddle']:.2f}" if np.isfinite(s['straddle']) else "N/A")
+        st.caption(f"Expiry: {sensex_exp} | Final Strike: {s['final_strike']}" if np.isfinite(s['final_strike']) else f"Expiry: {sensex_exp}")
 
-    st.caption("💡 Table full-width છે અને columns ને mouse થી drag કરીને તમારી જરૂર મુજબ resize કરી શકો છો. નીચે horizontal scroll પણ મળશે.")
-    display_ind = ind.copy()
-    for c in ['India VIX','NIFTY Spot','NIFTY Synthetic Future','NIFTY Final Strike','NIFTY Straddle',
-              'SENSEX Spot','SENSEX Synthetic Future','SENSEX Final Strike','SENSEX Straddle']:
-        if c in display_ind.columns:
-            display_ind[c] = pd.to_numeric(display_ind[c], errors='coerce')
+    st.divider()
+    st.markdown('<div class="section-title">🔍 Calculation Details</div>',unsafe_allow_html=True)
+    l,r=st.columns(2)
+    with l:
+        st.subheader("NIFTY")
+        st.dataframe(pd.DataFrame([{"Spot":n['spot'],"Provisional ATM":n['provisional_atm'],"ATM CE":n['atm_ce'],"ATM PE":n['atm_pe'],"Synthetic Future":n['synthetic_future'],"Final Strike":n['final_strike'],"Final CE":n['final_ce'],"Final PE":n['final_pe'],"Straddle":n['straddle'],"Status":n['status']}]),use_container_width=True,hide_index=True)
+    with r:
+        st.subheader("SENSEX")
+        st.dataframe(pd.DataFrame([{"Spot":s['spot'],"Provisional ATM":s['provisional_atm'],"ATM CE":s['atm_ce'],"ATM PE":s['atm_pe'],"Synthetic Future":s['synthetic_future'],"Final Strike":s['final_strike'],"Final CE":s['final_ce'],"Final PE":s['final_pe'],"Straddle":s['straddle'],"Status":s['status']}]),use_container_width=True,hide_index=True)
 
-    st.dataframe(
-        style_result_table(display_ind),
-        width="stretch",
-        height=520,
-        hide_index=True,
-        column_config={
-            "Date": st.column_config.TextColumn("Date", width="medium"),
-            "India VIX": st.column_config.NumberColumn("India VIX", format="%.2f", width="small"),
-            "NIFTY Spot": st.column_config.NumberColumn("NIFTY Spot", format="%.2f", width="medium"),
-            "NIFTY Synthetic Future": st.column_config.NumberColumn("NIFTY Synthetic Future", format="%.2f", width="medium"),
-            "NIFTY Final Strike": st.column_config.NumberColumn("NIFTY Final Strike", format="%.0f", width="medium"),
-            "NIFTY Straddle": st.column_config.NumberColumn("NIFTY Straddle", format="%.2f", width="medium"),
-            "SENSEX Spot": st.column_config.NumberColumn("SENSEX Spot", format="%.2f", width="medium"),
-            "SENSEX Synthetic Future": st.column_config.NumberColumn("SENSEX Synthetic Future", format="%.2f", width="medium"),
-            "SENSEX Final Strike": st.column_config.NumberColumn("SENSEX Final Strike", format="%.0f", width="medium"),
-            "SENSEX Straddle": st.column_config.NumberColumn("SENSEX Straddle", format="%.2f", width="medium"),
-        },
-    )
-    st.download_button('Download Individual Straddle CSV',ind.to_csv(index=False).encode('utf-8'),'individual_straddles.csv','text/csv')
+    @st.cache_data(show_spinner=False)
+    def individual_range(dates_range,n_exp,s_exp):
+        rows=[]
+        for dt in dates_range:
+            try:
+                n,s,vix,_=calculate_day(dt,n_exp,s_exp,3.30)
+                if np.isfinite(n['straddle']) and np.isfinite(s['straddle']):
+                    rows.append({
+                        'Date':dt,
+                        'India VIX':vix,
+                        'NIFTY Spot':n['spot'],
+                        'NIFTY Synthetic Future':n['synthetic_future'],
+                        'NIFTY Final Strike':n['final_strike'],
+                        'NIFTY Straddle':n['straddle'],
+                        'SENSEX Spot':s['spot'],
+                        'SENSEX Synthetic Future':s['synthetic_future'],
+                        'SENSEX Final Strike':s['final_strike'],
+                        'SENSEX Straddle':s['straddle']
+                    })
+            except Exception: continue
+        return pd.DataFrame(rows)
+
+    st.divider()
+    st.markdown('<div class="section-title">📈 Date-wise Individual Straddle</div>',unsafe_allow_html=True)
+    ind=individual_range(view_dates,nifty_exp,sensex_exp)
+    if ind.empty:
+        st.warning("Selected range માટે બંને individual straddlesનો usable data મળ્યો નથી.")
+    else:
+        st.line_chart(ind.set_index('Date')[['NIFTY Straddle','SENSEX Straddle']],use_container_width=True)
+
+        # Flexible, full-width date-wise table with light visual grouping.
+        def style_result_table(df):
+            sty = df.style
+            nifty_cols = ['NIFTY Spot','NIFTY Synthetic Future','NIFTY Final Strike','NIFTY Straddle']
+            sensex_cols = ['SENSEX Spot','SENSEX Synthetic Future','SENSEX Final Strike','SENSEX Straddle']
+            vix_cols = ['India VIX']
+
+            for c in nifty_cols:
+                if c in df.columns:
+                    sty = sty.set_properties(subset=[c], **{'background-color':'#eef6ff'})
+            for c in sensex_cols:
+                if c in df.columns:
+                    sty = sty.set_properties(subset=[c], **{'background-color':'#eefbf2'})
+            for c in vix_cols:
+                if c in df.columns:
+                    sty = sty.set_properties(subset=[c], **{'background-color':'#f7f7f7'})
+            if 'Date' in df.columns:
+                sty = sty.set_properties(subset=['Date'], **{'font-weight':'600'})
+            return sty
+
+        st.caption("💡 Table full-width છે અને columns ને mouse થી drag કરીને તમારી જરૂર મુજબ resize કરી શકો છો. નીચે horizontal scroll પણ મળશે.")
+        display_ind = ind.copy()
+        for c in ['India VIX','NIFTY Spot','NIFTY Synthetic Future','NIFTY Final Strike','NIFTY Straddle',
+                  'SENSEX Spot','SENSEX Synthetic Future','SENSEX Final Strike','SENSEX Straddle']:
+            if c in display_ind.columns:
+                display_ind[c] = pd.to_numeric(display_ind[c], errors='coerce')
+
+        st.dataframe(
+            style_result_table(display_ind),
+            width="stretch",
+            height=520,
+            hide_index=True,
+            column_config={
+                "Date": st.column_config.TextColumn("Date", width="medium"),
+                "India VIX": st.column_config.NumberColumn("India VIX", format="%.2f", width="small"),
+                "NIFTY Spot": st.column_config.NumberColumn("NIFTY Spot", format="%.2f", width="medium"),
+                "NIFTY Synthetic Future": st.column_config.NumberColumn("NIFTY Synthetic Future", format="%.2f", width="medium"),
+                "NIFTY Final Strike": st.column_config.NumberColumn("NIFTY Final Strike", format="%.0f", width="medium"),
+                "NIFTY Straddle": st.column_config.NumberColumn("NIFTY Straddle", format="%.2f", width="medium"),
+                "SENSEX Spot": st.column_config.NumberColumn("SENSEX Spot", format="%.2f", width="medium"),
+                "SENSEX Synthetic Future": st.column_config.NumberColumn("SENSEX Synthetic Future", format="%.2f", width="medium"),
+                "SENSEX Final Strike": st.column_config.NumberColumn("SENSEX Final Strike", format="%.0f", width="medium"),
+                "SENSEX Straddle": st.column_config.NumberColumn("SENSEX Straddle", format="%.2f", width="medium"),
+            },
+        )
+        st.download_button('Download Individual Straddle CSV',ind.to_csv(index=False).encode('utf-8'),'individual_straddles.csv','text/csv')
