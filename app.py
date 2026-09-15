@@ -14,11 +14,12 @@ SENSEX_STEP = 100
 
 st.markdown("""
 <style>
-.main-title{font-size:42px;font-weight:800;letter-spacing:-1.5px;margin-bottom:2px}
+.main-title{font-size:34px;font-weight:800;letter-spacing:-1px;margin-bottom:2px}
 .subtitle{color:#6b7280;font-size:15px;margin-bottom:18px}
-.section-title{font-size:21px;font-weight:750;margin-top:10px;margin-bottom:8px}
+.section-title{font-size:19px;font-weight:750;margin-top:6px;margin-bottom:5px}
 .formula-box{padding:14px 16px;border-radius:12px;background:#f6f7fb;border:1px solid #e5e7eb;font-family:monospace;font-size:15px}
-div[data-testid="stMetric"]{padding:12px 14px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stHorizontalBlock"]){gap:0.5rem}
+div[data-testid="stMetric"]{padding:8px 10px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.04)}
 </style>
 """, unsafe_allow_html=True)
 
@@ -377,18 +378,17 @@ else:
     st.markdown('<div class="subtitle">NIFTY / SENSEX • Two-expiry comparison • Flexible strikes • Analysis only</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="section-title">📅 Calendar Settings</div>', unsafe_allow_html=True)
-    instrument = st.radio("Instrument", ["NIFTY", "SENSEX"], horizontal=True, key="cal_instrument")
-    step = NIFTY_STEP if instrument == "NIFTY" else SENSEX_STEP
-
-    # Calendar dates are independent from the top-level Strategy Tester controls.
     cal_dates = dates
-    ca, cb, cc = st.columns(3)
-    with ca:
+    # Compact controls: keep the whole setup visible without large vertical gaps.
+    c1,c2,c3,c4 = st.columns([1.0,1.5,1.5,1.2])
+    with c1:
+        instrument = st.radio("Instrument", ["NIFTY", "SENSEX"], horizontal=True, key="cal_instrument")
+    with c2:
         cal_from = st.selectbox("From Date", cal_dates, index=max(0, len(cal_dates)-15), key="cal_from")
-    with cb:
+    with c3:
         cal_valid_to = [d for d in cal_dates if d >= cal_from]
         cal_to = st.selectbox("To Date", cal_valid_to, index=len(cal_valid_to)-1, key="cal_to")
-    with cc:
+    with c4:
         cal_days_mode = st.selectbox("Number of Days", ["All available", 5, 10, 15, 20, 30, 60], index=0, key="cal_days_mode")
 
     selected_cal_dates = [d for d in cal_dates if cal_from <= d <= cal_to]
@@ -396,6 +396,7 @@ else:
         selected_cal_dates = selected_cal_dates[:int(cal_days_mode)]
     st.caption(f"Analysis dates: {len(selected_cal_dates)} trading days")
 
+    # Expiries are selected from the actual analysis start date.
     cal_exp = expiry_values(cal_from, instrument)
     if len(cal_exp) < 2:
         st.error("આ તારીખે ઓછામાં ઓછી 2 expiry ઉપલબ્ધ નથી.")
@@ -406,6 +407,21 @@ else:
     with ca2:
         expiry2_options = [e for e in cal_exp if e != expiry1]
         expiry2 = st.selectbox("Expiry 2 (Far)", expiry2_options, index=0, key="cal_exp2")
+
+    # Selected market date: spot/futures update immediately when the date changes.
+    snap_date = st.selectbox("Market / View Date", selected_cal_dates if selected_cal_dates else cal_dates, index=0, key="cal_snap_date")
+    snap_spot_n, snap_spot_s, snap_vix = market_values(snap_date)
+    snap_spot = snap_spot_n if instrument == "NIFTY" else snap_spot_s
+    snap_df = day_options(snap_date, instrument)
+    snap_r1 = locked_straddle(snap_df, instrument, expiry1, step, snap_spot)
+    snap_r2 = locked_straddle(snap_df, instrument, expiry2, step, snap_spot)
+
+    sm1,sm2,sm3,sm4 = st.columns(4)
+    with sm1: st.metric(f"{instrument} Spot", f"{snap_spot:.2f}" if np.isfinite(snap_spot) else "N/A")
+    with sm2: st.metric(f"{expiry1} Synthetic Future", f"{snap_r1['synthetic_future']:.2f}" if np.isfinite(snap_r1['synthetic_future']) else "N/A")
+    with sm3: st.metric(f"{expiry2} Synthetic Future", f"{snap_r2['synthetic_future']:.2f}" if np.isfinite(snap_r2['synthetic_future']) else "N/A")
+    with sm4: st.metric("India VIX", f"{snap_vix:.2f}" if np.isfinite(snap_vix) else "N/A")
+    st.caption(f"View date: {snap_date}  •  {expiry1} Straddle: {snap_r1['straddle']:.2f}  •  {expiry2} Straddle: {snap_r2['straddle']:.2f}" if np.isfinite(snap_r1['straddle']) and np.isfinite(snap_r2['straddle']) else f"View date: {snap_date}")
 
     # Base strike can be selected automatically from the first selected date's locked synthetic future,
     # or manually overridden. This keeps strike selection flexible while preserving instrument strike steps.
@@ -492,7 +508,7 @@ else:
             st.error("Selected dates / strikes / expiries માટે usable option data મળ્યો નથી.")
         else:
             st.markdown('<div class="section-title">📊 Expiry Comparison</div>', unsafe_allow_html=True)
-            st.dataframe(cal, width="stretch", height=620, hide_index=True, column_config={
+            st.dataframe(cal, width="stretch", height=500, hide_index=True, column_config={
                 "Date": st.column_config.TextColumn(width="medium"),
                 "Spot": st.column_config.NumberColumn(format="%.2f"),
                 "India VIX": st.column_config.NumberColumn(format="%.2f"),
