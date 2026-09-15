@@ -158,10 +158,17 @@ st.sidebar.divider()
 st.sidebar.caption("Click a section above. Only the selected section is shown.")
 
 # -----------------------------
+# SHARED AVAILABLE DATES
+# -----------------------------
+dates=available_dates()
+if not dates:
+    st.error("No usable option dates are available in the database.")
+    st.stop()
+
+# -----------------------------
 # DATE / EXPIRY SELECTION FOR MAIN STRATEGY / INDIVIDUAL ONLY
 # -----------------------------
 if page != "📅 Calendar Strategy":
-    dates=available_dates()
     if not dates:
         st.error("No common NIFTY + SENSEX option dates are available in the database.")
         st.stop()
