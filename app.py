@@ -456,8 +456,11 @@ else:
         pe_base=st.selectbox("PE Base Strike (નીચે)",available,index=max(0,min(len(available)-1,pe_default)),key="cal_pe_base")
     st.caption(f"CE base {ce_base:.0f} • PE base {pe_base:.0f} • strike gap {adjacent_gap:.0f} • ratio {ratio:.2f}")
 
-    def option_close_fast(df,expiry,strike,typ):
-        if df.empty: return np.nan
+    def option_close_fast(df,trade_date,expiry,strike,typ):
+        # Once an expiry has passed, that leg must show no value.
+        # The expiry date itself remains valid (market close data is available).
+        if df.empty or str(trade_date) > str(expiry):
+            return np.nan
         q=df[(df["expiry"].eq(expiry)) & (df["strike"].eq(float(strike))) & (df["option_type"].eq(typ))]
         return float(q.iloc[0]["close"]) if not q.empty else np.nan
 
@@ -476,15 +479,23 @@ else:
 
         # Keep one parsed option dataframe per date for the entire calculation.
         day_map={dt:day_options(dt,symbol) for dt in dates_range}
+
+        def leg_result(dt, expiry):
+            # No synthetic future/straddle after that expiry has passed.
+            if str(dt) > str(expiry):
+                return {"synthetic_future":np.nan,"straddle":np.nan}
+            spot = market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1]
+            return locked_straddle(day_map[dt],symbol,expiry,step,spot)
+
         rows=[]
         # Market rows at top.
         for label, values in [
             ("India VIX", [market_values(dt)[2] for dt in dates_range]),
             ("Spot", [market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1] for dt in dates_range]),
-            ("FAR Synthetic Future", [locked_straddle(day_map[dt],symbol,far_exp,step,market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1])["synthetic_future"] for dt in dates_range]),
-            ("NEAR Synthetic Future", [locked_straddle(day_map[dt],symbol,near_exp,step,market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1])["synthetic_future"] for dt in dates_range]),
-            ("FAR Straddle", [locked_straddle(day_map[dt],symbol,far_exp,step,market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1])["straddle"] for dt in dates_range]),
-            ("NEAR Straddle", [locked_straddle(day_map[dt],symbol,near_exp,step,market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1])["straddle"] for dt in dates_range]),
+            ("FAR Synthetic Future", [leg_result(dt,far_exp)["synthetic_future"] for dt in dates_range]),
+            ("NEAR Synthetic Future", [leg_result(dt,near_exp)["synthetic_future"] for dt in dates_range]),
+            ("FAR Straddle", [leg_result(dt,far_exp)["straddle"] for dt in dates_range]),
+            ("NEAR Straddle", [leg_result(dt,near_exp)["straddle"] for dt in dates_range]),
         ]:
             row={"Metric":label}; row.update(dict(zip(dates_range,values))); rows.append(row)
 
@@ -494,7 +505,7 @@ else:
             row={"Metric":f"{cs}"}
             for dt in dates_range:
                 df=day_map[dt]
-                f=option_close_fast(df,far_exp,cs,"CE"); nval=option_close_fast(df,near_exp,cs,"CE")
+                f=option_close_fast(df,dt,far_exp,cs,"CE"); nval=option_close_fast(df,dt,near_exp,cs,"CE")
                 row[dt]=spread_value_fast(f,nval,ratio,formula)
             rows.append(row)
 
@@ -504,7 +515,7 @@ else:
             row={"Metric":f"{ps}"}
             for dt in dates_range:
                 df=day_map[dt]
-                f=option_close_fast(df,far_exp,ps,"PE"); nval=option_close_fast(df,near_exp,ps,"PE")
+                f=option_close_fast(df,dt,far_exp,ps,"PE"); nval=option_close_fast(df,dt,near_exp,ps,"PE")
                 row[dt]=spread_value_fast(f,nval,ratio,formula)
             rows.append(row)
         return pd.DataFrame(rows)
@@ -587,12 +598,26 @@ else:
                             sty=sty.set_properties(subset=pd.IndexSlice[row_idx,[cols[j]]], **{"background-color":"#ffebee","color":"#c62828","font-weight":"600"})
             return sty
 
+        fit_mode=st.radio(
+            "Table width",
+            ["Auto-fit all columns", "Compact columns"],
+            horizontal=True,
+            key="cal_table_fit_mode",
+        )
+        if fit_mode=="Auto-fit all columns":
+            col_cfg={"Metric":st.column_config.TextColumn("Metric",width="large")}
+            for c in matrix.columns[1:]:
+                col_cfg[c]=st.column_config.NumberColumn(c,width="small",format="%.2f")
+        else:
+            col_cfg={"Metric":st.column_config.TextColumn("Metric",width="medium")}
+            for c in matrix.columns[1:]:
+                col_cfg[c]=st.column_config.NumberColumn(c,width="small",format="%.2f")
         st.dataframe(
             calendar_style(matrix),
             width="stretch",
             height=560,
             hide_index=True,
-            column_config={"Metric":st.column_config.TextColumn("Metric",width="large")},
+            column_config=col_cfg,
         )
         st.download_button("Download Calendar Matrix CSV",matrix.to_csv(index=False).encode("utf-8"),f"{instrument.lower()}_calendar_matrix.csv","text/csv")
 
