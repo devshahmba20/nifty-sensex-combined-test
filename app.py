@@ -377,15 +377,17 @@ elif page == "📈 Individual Straddle":
         st.download_button('Download Individual Straddle CSV',ind.to_csv(index=False).encode('utf-8'),'individual_straddles.csv','text/csv')
 
 
+
 else:
     # -----------------------------
     # CALENDAR STRATEGY ANALYSIS
     # -----------------------------
     st.markdown('<div class="main-title">Calendar Strategy Analysis</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Far Expiry × Near Expiry • Horizontal date matrix • Flexible strikes • Analysis only</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Far Expiry × Near Expiry • Horizontal date matrix • Separate CE / PE legs</div>', unsafe_allow_html=True)
 
+    # Compact settings: less vertical space and faster calculation.
     st.markdown('<div class="section-title">📅 Calendar Settings</div>', unsafe_allow_html=True)
-    c1,c2,c3,c4=st.columns([1.0,1.45,1.45,1.0])
+    c1,c2,c3=st.columns([1.0,1.35,1.35])
     with c1:
         instrument=st.radio("Instrument",["NIFTY","SENSEX"],horizontal=True,key="cal_instrument")
     with c2:
@@ -393,27 +395,25 @@ else:
     with c3:
         cal_valid_to=[d for d in dates if d>=cal_from]
         cal_to=st.selectbox("To Date",cal_valid_to,index=len(cal_valid_to)-1,key="cal_to")
-    with c4:
-        days_mode=st.selectbox("Days",["All available",5,10,15,20,30,60,90],key="cal_days")
 
     selected_cal_dates=[d for d in dates if cal_from<=d<=cal_to]
-    if days_mode!="All available":
-        selected_cal_dates=selected_cal_dates[:int(days_mode)]
-    st.caption(f"Analysis: {len(selected_cal_dates)} trading days")
+    st.caption(f"Analysis dates: {len(selected_cal_dates)} trading days")
 
-    # IMPORTANT: Expiry 1 is FAR, Expiry 2 is NEAR.
     exp_list=expiry_values(cal_from,instrument)
     if len(exp_list)<2:
         st.error("આ તારીખે ઓછામાં ઓછી 2 expiry ઉપલબ્ધ નથી.")
         st.stop()
+
+    # Expiry 1 = FAR, Expiry 2 = NEAR.
     x1,x2=st.columns(2)
     with x1:
-        far_exp=st.selectbox("Expiry 1 — FAR",exp_list,index=min(1,len(exp_list)-1),key="cal_far")
+        far_default=min(1,len(exp_list)-1)
+        far_exp=st.selectbox("Expiry 1 — FAR",exp_list,index=far_default,key="cal_far")
     with x2:
         near_candidates=[e for e in exp_list if e!=far_exp]
         near_exp=st.selectbox("Expiry 2 — NEAR",near_candidates,index=0,key="cal_near")
 
-    # Market snapshot changes immediately with selected date.
+    # The selected view date immediately shows market + both expiry synthetic futures.
     snap_date=st.selectbox("Market / View Date",selected_cal_dates if selected_cal_dates else dates,index=0,key="cal_snap")
     snap_n,snap_s,snap_vix=market_values(snap_date)
     snap_spot=snap_n if instrument=="NIFTY" else snap_s
@@ -421,16 +421,17 @@ else:
     snap_df=day_options(snap_date,instrument)
     far_snap=locked_straddle(snap_df,instrument,far_exp,step_local,snap_spot)
     near_snap=locked_straddle(snap_df,instrument,near_exp,step_local,snap_spot)
+
     q1,q2,q3,q4=st.columns(4)
     q1.metric(f"{instrument} Spot",f"{snap_spot:.2f}" if np.isfinite(snap_spot) else "N/A")
     q2.metric("FAR Synthetic Future",f"{far_snap['synthetic_future']:.2f}" if np.isfinite(far_snap['synthetic_future']) else "N/A")
     q3.metric("NEAR Synthetic Future",f"{near_snap['synthetic_future']:.2f}" if np.isfinite(near_snap['synthetic_future']) else "N/A")
     q4.metric("India VIX",f"{snap_vix:.2f}" if np.isfinite(snap_vix) else "N/A")
     if np.isfinite(far_snap['straddle']) and np.isfinite(near_snap['straddle']):
-        st.caption(f"View date {snap_date} • FAR {far_exp} Straddle {far_snap['straddle']:.2f} • NEAR {near_exp} Straddle {near_snap['straddle']:.2f}")
+        st.caption(f"{snap_date} • FAR {far_exp} Straddle {far_snap['straddle']:.2f} • NEAR {near_exp} Straddle {near_snap['straddle']:.2f}")
 
-    st.markdown('<div class="section-title">🎯 Strike Settings</div>',unsafe_allow_html=True)
-    s1,s2,s3,s4,s5=st.columns([1.0,1.0,1.0,1.0,1.0])
+    st.markdown('<div class="section-title">🎯 Strike Settings</div>', unsafe_allow_html=True)
+    s1,s2,s3,s4=st.columns([1.0,1.0,1.0,1.0])
     with s1:
         total_strikes=st.selectbox("Total Strike Pairs",[1,3,5,7,9,11,15,21],index=4,key="cal_total")
     with s2:
@@ -439,9 +440,10 @@ else:
         ce_pe_gap=st.number_input("CE ↕ PE Gap",min_value=0.0,value=float(step_local*2),step=float(step_local),format="%.0f",key="cal_cepe_gap")
     with s4:
         ratio=st.number_input("Ratio",min_value=0.0,value=1.00,step=0.05,format="%.2f",key="cal_ratio")
-    with s5:
-        formula=st.selectbox("Spread Formula",["FAR − (NEAR × Ratio)","(FAR × Ratio) − NEAR"],key="cal_formula")
 
+    formula=st.selectbox("Spread Formula",["FAR − (NEAR × Ratio)","(FAR × Ratio) − NEAR"],key="cal_formula")
+
+    # Strike bases: CE is configured separately from PE.  Changing ratio changes spread values.
     available=sorted(day_options(cal_from,instrument)["strike"].dropna().unique().tolist())
     if not available:
         st.error("Selected date પર option strikes મળ્યા નથી.")
@@ -450,82 +452,97 @@ else:
     base_idx=int(np.argmin(np.abs(np.asarray(available,dtype=float)-float(auto_base))))
     b1,b2=st.columns(2)
     with b1:
-        ce_base=st.selectbox("CE Base Strike",available,index=base_idx,key="cal_ce_base")
+        ce_base=st.selectbox("CE Base Strike (ઉપર)",available,index=base_idx,key="cal_ce_base")
     with b2:
-        pe_base=st.selectbox("PE Base Strike",available,index=max(0,min(len(available)-1,int(np.argmin(np.abs(np.asarray(available,dtype=float)-(float(ce_base)-ce_pe_gap))))),),key="cal_pe_base")
-    st.caption(f"CE base {ce_base:.0f} • PE base {pe_base:.0f} • adjacent strike gap {adjacent_gap:.0f} • CE↕PE gap setting {ce_pe_gap:.0f} • ratio {ratio:.2f}")
+        pe_default=int(np.argmin(np.abs(np.asarray(available,dtype=float)-(float(ce_base)-ce_pe_gap))))
+        pe_base=st.selectbox("PE Base Strike (નીચે)",available,index=max(0,min(len(available)-1,pe_default)),key="cal_pe_base")
+    st.caption(f"CE base {ce_base:.0f} • PE base {pe_base:.0f} • side-by-side gap {adjacent_gap:.0f} • CE↕PE gap {ce_pe_gap:.0f} • ratio {ratio:.2f}")
 
-    def option_close(df,expiry,strike,typ):
+    def option_close_fast(df,expiry,strike,typ):
         if df.empty: return np.nan
         q=df[(df["expiry"].eq(expiry)) & (df["strike"].eq(float(strike))) & (df["option_type"].eq(typ))]
         return float(q.iloc[0]["close"]) if not q.empty else np.nan
 
-    def spread_value(far,near,ratio,formula):
+    def spread_value_fast(far,near,ratio,formula):
         if not (np.isfinite(far) and np.isfinite(near)): return np.nan
         return far-(near*ratio) if formula=="FAR − (NEAR × Ratio)" else (far*ratio)-near
 
-    # Horizontal matrix: one date per column, strike pairs down the rows.
-    def build_matrix(dates_range,symbol,far_exp,near_exp,ce_base,pe_base,count,adj_gap,cepe_gap,ratio,formula):
+    @st.cache_data(show_spinner=False)
+    def build_calendar_result(dates_range,symbol,far_exp,near_exp,ce_base,pe_base,count,adj_gap,cepe_gap,ratio,formula):
+        """One pass over each date. CE and PE are separate rows; no repeated pair calculations."""
         step=NIFTY_STEP if symbol=="NIFTY" else SENSEX_STEP
-        offsets=list(range(-(int(count)//2),int(count)//2+1)) if int(count)%2 else list(range(-(int(count)//2),int(count)//2))
-        ce_strikes=[int(round(float(ce_base)+o*float(adj_gap))) for o in offsets]
-        pe_strikes=[int(round(float(pe_base)+o*float(adj_gap))) for o in offsets]
-        # keep strikes on the instrument's actual strike grid
-        ce_strikes=[int(round(x/step)*step) for x in ce_strikes]
-        pe_strikes=[int(round(x/step)*step) for x in pe_strikes]
+        half=int(count)//2
+        offsets=list(range(-half,half+1))
+        ce_strikes=[int(round((float(ce_base)+o*float(adj_gap))/step)*step) for o in offsets]
+        pe_strikes=[int(round((float(pe_base)+o*float(adj_gap))/step)*step) for o in offsets]
+
+        # Keep one parsed option dataframe per date for the entire calculation.
+        day_map={dt:day_options(dt,symbol) for dt in dates_range}
         rows=[]
-        # market rows first
-        for label,fn in [
-            ("India VIX",lambda dt: market_values(dt)[2]),
-            ("Spot",lambda dt: market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1]),
-            ("FAR Synthetic Future",lambda dt: locked_straddle(day_options(dt,symbol),symbol,far_exp,step,market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1])["synthetic_future"]),
-            ("NEAR Synthetic Future",lambda dt: locked_straddle(day_options(dt,symbol),symbol,near_exp,step,market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1])["synthetic_future"]),
-            ("FAR Straddle",lambda dt: locked_straddle(day_options(dt,symbol),symbol,far_exp,step,market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1])["straddle"]),
-            ("NEAR Straddle",lambda dt: locked_straddle(day_options(dt,symbol),symbol,near_exp,step,market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1])["straddle"]),
+        # Market rows at top.
+        for label, values in [
+            ("India VIX", [market_values(dt)[2] for dt in dates_range]),
+            ("Spot", [market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1] for dt in dates_range]),
+            ("FAR Synthetic Future", [locked_straddle(day_map[dt],symbol,far_exp,step,market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1])["synthetic_future"] for dt in dates_range]),
+            ("NEAR Synthetic Future", [locked_straddle(day_map[dt],symbol,near_exp,step,market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1])["synthetic_future"] for dt in dates_range]),
+            ("FAR Straddle", [locked_straddle(day_map[dt],symbol,far_exp,step,market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1])["straddle"] for dt in dates_range]),
+            ("NEAR Straddle", [locked_straddle(day_map[dt],symbol,near_exp,step,market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1])["straddle"] for dt in dates_range]),
         ]:
-            row={"Metric":label}
+            row={"Metric":label}; row.update(dict(zip(dates_range,values))); rows.append(row)
+
+        # Separate CE section: CE strike rows only.
+        rows.append({"Metric":"🟦 CALL / CE — Strike rows",**{dt:np.nan for dt in dates_range}})
+        for cs in ce_strikes:
+            row={"Metric":f"CE {cs}"}
             for dt in dates_range:
-                try: row[dt]=fn(dt)
-                except Exception: row[dt]=np.nan
+                df=day_map[dt]
+                f=option_close_fast(df,far_exp,cs,"CE"); nval=option_close_fast(df,near_exp,cs,"CE")
+                row[dt]=spread_value_fast(f,nval,ratio,formula)
             rows.append(row)
-        rows.append({"Metric":"— CE / PE STRIKE PAIRS —",**{dt:np.nan for dt in dates_range}})
-        for i,(cs,ps) in enumerate(zip(ce_strikes,pe_strikes),1):
-            row={"Metric":f"CE {cs}  |  PE {ps}"}
+
+        # Separate PE section: PE strike rows only.
+        rows.append({"Metric":"🟥 PUT / PE — Strike rows",**{dt:np.nan for dt in dates_range}})
+        for ps in pe_strikes:
+            row={"Metric":f"PE {ps}"}
             for dt in dates_range:
-                try:
-                    df=day_options(dt,symbol)
-                    ce_far=option_close(df,far_exp,cs,"CE"); ce_near=option_close(df,near_exp,cs,"CE")
-                    pe_far=option_close(df,far_exp,ps,"PE"); pe_near=option_close(df,near_exp,ps,"PE")
-                    ce_sp=spread_value(ce_far,ce_near,ratio,formula)
-                    pe_sp=spread_value(pe_far,pe_near,ratio,formula)
-                    row[dt]=ce_sp-pe_sp if np.isfinite(ce_sp) and np.isfinite(pe_sp) else np.nan
-                except Exception: row[dt]=np.nan
+                df=day_map[dt]
+                f=option_close_fast(df,far_exp,ps,"PE"); nval=option_close_fast(df,near_exp,ps,"PE")
+                row[dt]=spread_value_fast(f,nval,ratio,formula)
             rows.append(row)
         return pd.DataFrame(rows)
 
+    # Explicitly opt in to the calculation; changing controls no longer recomputes the large matrix.
     run_cal=st.button("Calculate Calendar Analysis",type="primary",key="run_calendar_final")
     if run_cal:
-        matrix=build_matrix(tuple(selected_cal_dates),instrument,far_exp,near_exp,float(ce_base),float(pe_base),int(total_strikes),float(adjacent_gap),float(ce_pe_gap),float(ratio),formula)
+        with st.spinner(f"Calculating {len(selected_cal_dates)} days × {int(total_strikes)*2} option legs..."):
+            matrix=build_calendar_result(tuple(selected_cal_dates),instrument,far_exp,near_exp,float(ce_base),float(pe_base),int(total_strikes),float(adjacent_gap),float(ce_pe_gap),float(ratio),formula)
         st.markdown('<div class="section-title">📊 Calendar Result — Dates Horizontal</div>',unsafe_allow_html=True)
-        st.caption("દરેક date ઉપર એક જ વાર છે. ઉપર market/future/straddle rows છે અને નીચે CE/PE strike pairs છે. Horizontal scrollથી વધુ dates જોઈ શકો છો.")
-        # transpose-like matrix with compact columns
-        st.dataframe(matrix,width="stretch",height=620,hide_index=True,column_config={"Metric":st.column_config.TextColumn("Metric",width="large")})
+        st.caption("હવે CE અને PE અલગ છે: ઉપર CE strike rows અને નીચે PE strike rows. દરેક date એક જ column છે. Ratio બદલશો તો spread values બદલાશે.")
 
-        # Also provide separate CE and PE detail matrices so premiums and spread rates are transparent.
-        st.markdown('<div class="section-title">🔎 CE / PE Spread Detail</div>',unsafe_allow_html=True)
-        detail_rows=[]
-        step=NIFTY_STEP if instrument=="NIFTY" else SENSEX_STEP
-        offsets=list(range(-(int(total_strikes)//2),int(total_strikes)//2+1)) if int(total_strikes)%2 else list(range(-(int(total_strikes)//2),int(total_strikes)//2))
-        ce_strikes=[int(round(float(ce_base)+o*float(adjacent_gap))) for o in offsets]
-        pe_strikes=[int(round(float(pe_base)+o*float(adjacent_gap))) for o in offsets]
-        for cs,ps in zip(ce_strikes,pe_strikes):
-            for leg,stc,typ in [("CE",cs,"CE"),("PE",ps,"PE")]:
-                row={"Leg":leg,"Strike":stc}
-                for dt in selected_cal_dates:
-                    df=day_options(dt,instrument)
-                    f=option_close(df,far_exp,stc,typ); nval=option_close(df,near_exp,stc,typ)
-                    row[dt]=spread_value(f,nval,ratio,formula)
-                detail_rows.append(row)
-        detail=pd.DataFrame(detail_rows)
-        st.dataframe(detail,width="stretch",height=520,hide_index=True)
+        # Attractive row grouping without forcing users into a huge vertical table.
+        def calendar_style(df):
+            sty=df.style
+            if "Metric" in df.columns:
+                sty=sty.set_properties(subset=["Metric"],**{"font-weight":"600"})
+            for c in df.columns[1:]:
+                sty=sty.set_properties(subset=[c],**{"text-align":"right"})
+            # Section rows: visual separators.
+            def row_css(row):
+                m=str(row.iloc[0])
+                if "CALL / CE" in m:
+                    return ["font-weight:700; background-color:#eaf3ff"]*len(row)
+                if "PUT / PE" in m:
+                    return ["font-weight:700; background-color:#fff0f0"]*len(row)
+                return [""]*len(row)
+            sty=sty.apply(row_css,axis=1)
+            return sty
+
+        st.dataframe(
+            calendar_style(matrix),
+            width="stretch",
+            height=560,
+            hide_index=True,
+            column_config={"Metric":st.column_config.TextColumn("Metric",width="large")},
+        )
         st.download_button("Download Calendar Matrix CSV",matrix.to_csv(index=False).encode("utf-8"),f"{instrument.lower()}_calendar_matrix.csv","text/csv")
+
