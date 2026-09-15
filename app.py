@@ -576,14 +576,6 @@ else:
             for c in df.columns[1:]:
                 sty=sty.set_properties(subset=[c], **{"text-align":"right"})
 
-            # Display precision: market rows 2 decimals; spread rows whole numbers.
-            market_rows={"India VIX","Spot","FAR Synthetic Future","NEAR Synthetic Future","FAR Straddle","NEAR Straddle"}
-            for i,m in enumerate(df["Metric"].astype(str)):
-                if m in market_rows:
-                    sty=sty.format({c:"{:.2f}" for c in df.columns[1:]}, subset=pd.IndexSlice[i,:])
-                elif "→" in m and "→" in m:
-                    sty=sty.format({c:"{:.0f}" for c in df.columns[1:]}, subset=pd.IndexSlice[i,:])
-
             # Section headers.
             def row_css(row):
                 m=str(row.iloc[0])
