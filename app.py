@@ -48,7 +48,12 @@ def market_values(dt):
     con.close()
     if row is None:
         return np.nan,np.nan,np.nan
-    return tuple(float(x) if x is not None else np.nan for x in row)
+    vals = tuple(float(x) if x is not None else np.nan for x in row)
+    # Guard against malformed VIX values in source data (VIX is an index, not a spot price).
+    # If a VIX value is accidentally populated with an index spot, show it as unavailable.
+    if np.isfinite(vals[2]) and (vals[2] < 0 or vals[2] > 100):
+        vals = (vals[0], vals[1], np.nan)
+    return vals
 
 @st.cache_data(show_spinner=False)
 def day_options(dt, symbol):
@@ -500,14 +505,27 @@ else:
             return locked_straddle(day_map[dt],symbol,expiry,step,spot)
 
         rows=[]
+        # Calendar is valid only while BOTH legs are alive.
+        # Once the earlier (NEAR) expiry is over, do not show Spot/VIX/Futures/Straddles
+        # or CE/PE spread values for the remaining dates. The expiry day itself is valid.
+        calendar_cutoff = min(str(far_exp), str(near_exp))
+
+        def market_value_until_cutoff(dt, field):
+            if str(dt) > calendar_cutoff:
+                return np.nan
+            mv = market_values(dt)
+            if field == "vix":
+                return mv[2]
+            return mv[0] if symbol == "NIFTY" else mv[1]
+
         # Market rows at top.
         for label, values in [
-            ("India VIX", [market_values(dt)[2] for dt in dates_range]),
-            ("Spot", [market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1] for dt in dates_range]),
-            ("FAR Synthetic Future", [leg_result(dt,far_exp)["synthetic_future"] for dt in dates_range]),
-            ("NEAR Synthetic Future", [leg_result(dt,near_exp)["synthetic_future"] for dt in dates_range]),
-            ("FAR Straddle", [leg_result(dt,far_exp)["straddle"] for dt in dates_range]),
-            ("NEAR Straddle", [leg_result(dt,near_exp)["straddle"] for dt in dates_range]),
+            ("India VIX", [market_value_until_cutoff(dt, "vix") for dt in dates_range]),
+            ("Spot", [market_value_until_cutoff(dt, "spot") for dt in dates_range]),
+            ("FAR Synthetic Future", [leg_result(dt,far_exp)["synthetic_future"] if str(dt) <= calendar_cutoff else np.nan for dt in dates_range]),
+            ("NEAR Synthetic Future", [leg_result(dt,near_exp)["synthetic_future"] if str(dt) <= calendar_cutoff else np.nan for dt in dates_range]),
+            ("FAR Straddle", [leg_result(dt,far_exp)["straddle"] if str(dt) <= calendar_cutoff else np.nan for dt in dates_range]),
+            ("NEAR Straddle", [leg_result(dt,near_exp)["straddle"] if str(dt) <= calendar_cutoff else np.nan for dt in dates_range]),
         ]:
             row={"Metric":label}; row.update(dict(zip(dates_range,values))); rows.append(row)
 
@@ -517,8 +535,11 @@ else:
             row={"Metric":f"{fs} → {ns}"}
             for dt in dates_range:
                 df=day_map[dt]
-                f=option_close_fast(df,dt,far_exp,fs,"CE"); nval=option_close_fast(df,dt,near_exp,ns,"CE")
-                row[dt]=spread_value_fast(f,nval,ratio,formula)
+                if str(dt) > calendar_cutoff:
+                    row[dt]=np.nan
+                else:
+                    f=option_close_fast(df,dt,far_exp,fs,"CE"); nval=option_close_fast(df,dt,near_exp,ns,"CE")
+                    row[dt]=spread_value_fast(f,nval,ratio,formula)
             rows.append(row)
 
         # Separate PE section: PE strike rows only.
@@ -527,8 +548,11 @@ else:
             row={"Metric":f"{fs} → {ns}"}
             for dt in dates_range:
                 df=day_map[dt]
-                f=option_close_fast(df,dt,far_exp,fs,"PE"); nval=option_close_fast(df,dt,near_exp,ns,"PE")
-                row[dt]=spread_value_fast(f,nval,ratio,formula)
+                if str(dt) > calendar_cutoff:
+                    row[dt]=np.nan
+                else:
+                    f=option_close_fast(df,dt,far_exp,fs,"PE"); nval=option_close_fast(df,dt,near_exp,ns,"PE")
+                    row[dt]=spread_value_fast(f,nval,ratio,formula)
             rows.append(row)
         return pd.DataFrame(rows)
 
@@ -646,7 +670,7 @@ else:
         st.dataframe(
             calendar_style(display_matrix, highlight_on),
             width="stretch",
-            height=560,
+            height=760,
             hide_index=True,
             column_config=col_cfg,
         )
