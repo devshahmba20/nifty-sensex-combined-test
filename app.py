@@ -517,21 +517,27 @@ else:
         st.markdown('<div class="section-title">📊 Calendar Result — Dates Horizontal</div>',unsafe_allow_html=True)
         st.caption("હવે CE અને PE અલગ છે: ઉપર CE strike rows અને નીચે PE strike rows. દરેક date એક જ column છે. Ratio બદલશો તો spread values બદલાશે.")
 
-        # Attractive row grouping without forcing users into a huge vertical table.
+        # Attractive formatting:
+        # 1) CE and PE rows are separate.
+        # 2) Highest spread for each date is highlighted separately in CE and PE.
+        # 3) VIX, Spot and Synthetic Futures are green/red versus the previous date.
+        # 4) Straddle rows intentionally have NO conditional formatting.
         def calendar_style(df):
             sty=df.style
             if "Metric" in df.columns:
-                sty=sty.set_properties(subset=["Metric"],**{"font-weight":"600"})
+                sty=sty.set_properties(subset=["Metric"], **{"font-weight":"600"})
             for c in df.columns[1:]:
-                sty=sty.set_properties(subset=[c],**{"text-align":"right"})
-            # Market rows: exactly 2 decimals. CE/PE spread rows: whole numbers.
+                sty=sty.set_properties(subset=[c], **{"text-align":"right"})
+
             market_rows={"India VIX","Spot","FAR Synthetic Future","NEAR Synthetic Future","FAR Straddle","NEAR Straddle"}
             for i,m in enumerate(df["Metric"].astype(str)):
                 if m in market_rows:
-                    sty=sty.format({c:"{:.2f}" for c in df.columns[1:]},subset=pd.IndexSlice[i,:])
+                    sty=sty.format({c:"{:.2f}" for c in df.columns[1:]}, subset=pd.IndexSlice[i,:])
                 elif m.isdigit():
-                    sty=sty.format({c:"{:.0f}" for c in df.columns[1:]},subset=pd.IndexSlice[i,:])
-            # Section rows: visual separators.
+                    # Spread values are intentionally whole numbers.
+                    sty=sty.format({c:"{:.0f}" for c in df.columns[1:]}, subset=pd.IndexSlice[i,:])
+
+            # Section headers.
             def row_css(row):
                 m=str(row.iloc[0])
                 if "CALL / CE" in m:
@@ -539,7 +545,46 @@ else:
                 if "PUT / PE" in m:
                     return ["font-weight:700; background-color:#fff0f0"]*len(row)
                 return [""]*len(row)
-            sty=sty.apply(row_css,axis=1)
+            sty=sty.apply(row_css, axis=1)
+
+            # Highlight the highest CE spread and highest PE spread for EACH date.
+            ce_mask=df["Metric"].astype(str).str.match(r"^\d+$")
+            # Find the PE section boundary; rows after it are PE rows.
+            pe_header_idx=next((i for i,m in enumerate(df["Metric"].astype(str)) if "PUT / PE" in m), len(df))
+            ce_indices=[i for i in range(pe_header_idx) if ce_mask.iloc[i]]
+            pe_indices=[i for i in range(pe_header_idx+1, len(df)) if str(df.iloc[i,0]).isdigit()]
+            highlight_css="background-color:#fff2a8; font-weight:700; border:1px solid #d9b300;"
+            if ce_indices:
+                for col in df.columns[1:]:
+                    vals=pd.to_numeric(df.loc[ce_indices,col], errors="coerce")
+                    if vals.notna().any():
+                        maxv=vals.max()
+                        for idx in vals[vals.eq(maxv)].index:
+                            sty=sty.set_properties(subset=pd.IndexSlice[idx,[col]], **{"background-color":"#fff2a8","font-weight":"700"})
+            if pe_indices:
+                for col in df.columns[1:]:
+                    vals=pd.to_numeric(df.loc[pe_indices,col], errors="coerce")
+                    if vals.notna().any():
+                        maxv=vals.max()
+                        for idx in vals[vals.eq(maxv)].index:
+                            sty=sty.set_properties(subset=pd.IndexSlice[idx,[col]], **{"background-color":"#fff2a8","font-weight":"700"})
+
+            # Market movement: green if today's value is above previous date, red if below.
+            # Straddle rows are deliberately excluded from this formatting.
+            movement_rows={"India VIX","Spot","FAR Synthetic Future","NEAR Synthetic Future"}
+            for row_idx,m in enumerate(df["Metric"].astype(str)):
+                if m not in movement_rows:
+                    continue
+                vals=pd.to_numeric(df.iloc[row_idx,1:], errors="coerce")
+                cols=list(df.columns[1:])
+                for j in range(1,len(cols)):
+                    prev=vals.iloc[j-1]
+                    cur=vals.iloc[j]
+                    if pd.notna(prev) and pd.notna(cur):
+                        if cur>prev:
+                            sty=sty.set_properties(subset=pd.IndexSlice[row_idx,[cols[j]]], **{"background-color":"#e8f5e9","color":"#137333","font-weight":"600"})
+                        elif cur<prev:
+                            sty=sty.set_properties(subset=pd.IndexSlice[row_idx,[cols[j]]], **{"background-color":"#ffebee","color":"#c62828","font-weight":"600"})
             return sty
 
         st.dataframe(
