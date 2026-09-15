@@ -610,12 +610,16 @@ else:
                             sty=sty.set_properties(subset=pd.IndexSlice[row_idx,[cols[j]]], **{"background-color":"#ffebee","color":"#c62828","font-weight":"600"})
             return sty
 
+        # Keep the calculated matrix across Streamlit reruns (radio/column-width changes).
+        st.session_state["calendar_matrix"] = matrix.copy()
+
         fit_mode=st.radio(
             "Table width",
             ["Auto-fit all columns", "Compact columns"],
             horizontal=True,
             key="cal_table_fit_mode",
         )
+        matrix = st.session_state.get("calendar_matrix", matrix)
         if fit_mode=="Auto-fit all columns":
             col_cfg={"Metric":st.column_config.TextColumn("Metric",width="large")}
             for c in matrix.columns[1:]:
