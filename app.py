@@ -413,8 +413,9 @@ else:
     snap_spot_n, snap_spot_s, snap_vix = market_values(snap_date)
     snap_spot = snap_spot_n if instrument == "NIFTY" else snap_spot_s
     snap_df = day_options(snap_date, instrument)
-    snap_r1 = locked_straddle(snap_df, instrument, expiry1, step, snap_spot)
-    snap_r2 = locked_straddle(snap_df, instrument, expiry2, step, snap_spot)
+    snap_step = NIFTY_STEP if instrument == "NIFTY" else SENSEX_STEP
+    snap_r1 = locked_straddle(snap_df, instrument, expiry1, snap_step, snap_spot)
+    snap_r2 = locked_straddle(snap_df, instrument, expiry2, snap_step, snap_spot)
 
     sm1,sm2,sm3,sm4 = st.columns(4)
     with sm1: st.metric(f"{instrument} Spot", f"{snap_spot:.2f}" if np.isfinite(snap_spot) else "N/A")
