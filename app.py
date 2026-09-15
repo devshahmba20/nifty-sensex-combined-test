@@ -532,32 +532,56 @@ else:
             rows.append(row)
         return pd.DataFrame(rows)
 
-    # Explicitly opt in to the calculation; changing controls no longer recomputes the large matrix.
+    # Explicitly opt in to the calculation; changing display controls must NOT erase the result.
     run_cal=st.button("Calculate Calendar Analysis",type="primary",key="run_calendar_final")
     if run_cal:
         with st.spinner(f"Calculating {len(selected_cal_dates)} days × {int(total_strikes)*2} option legs..."):
-            matrix=build_calendar_result(tuple(selected_cal_dates),instrument,far_exp,near_exp,float(ce_far),float(ce_near),float(pe_far),float(pe_near),int(total_strikes),float(adjacent_gap),float(ratio),formula)
-        st.markdown('<div class="section-title">📊 Calendar Result — Dates Horizontal</div>',unsafe_allow_html=True)
-        st.caption("હવે CE અને PE અલગ છે: ઉપર CE strike rows અને નીચે PE strike rows. દરેક date એક જ column છે. Ratio બદલશો તો spread values બદલાશે.")
+            st.session_state["calendar_matrix"] = build_calendar_result(
+                tuple(selected_cal_dates), instrument, far_exp, near_exp,
+                float(ce_far), float(ce_near), float(pe_far), float(pe_near),
+                int(total_strikes), float(adjacent_gap), float(ratio), formula
+            )
+        st.session_state["calendar_calc_signature"] = (
+            tuple(selected_cal_dates), instrument, far_exp, near_exp,
+            float(ce_far), float(ce_near), float(pe_far), float(pe_near),
+            int(total_strikes), float(adjacent_gap), float(ratio), formula
+        )
 
-        # Attractive formatting:
-        # 1) CE and PE rows are separate.
-        # 2) Highest spread for each date is highlighted separately in CE and PE.
-        # 3) VIX, Spot and Synthetic Futures are green/red versus the previous date.
-        # 4) Straddle rows intentionally have NO conditional formatting.
-        def calendar_style(df):
+    # Display controls live OUTSIDE the calculate button so changing them never hides the table.
+    matrix = st.session_state.get("calendar_matrix")
+    if matrix is not None and not matrix.empty:
+        st.markdown('<div class="section-title">📊 Calendar Result — Dates Horizontal</div>',unsafe_allow_html=True)
+        st.caption("CE અને PE અલગ sectionsમાં છે. દરેક date એક column છે. Ratio બદલશો તો નવી calculation માટે Calculate દબાવો.")
+
+        d1,d2=st.columns([1.0,1.0])
+        with d1:
+            fit_mode=st.radio(
+                "Table width",
+                ["Auto-fit all columns", "Compact columns"],
+                horizontal=True,
+                key="cal_table_fit_mode",
+            )
+        with d2:
+            highlight_on=st.checkbox(
+                "Highlight highest spread + market movement",
+                value=False,
+                key="cal_highlight_on",
+                help="ON કરો ત્યારે CE/PEના daily highest spreads અને VIX/Spot/Futuresના up/down values highlight થશે. OFF રાખશો તો plain table રહેશે."
+            )
+
+        def calendar_style(df, do_highlight=False):
             sty=df.style
             if "Metric" in df.columns:
                 sty=sty.set_properties(subset=["Metric"], **{"font-weight":"600"})
             for c in df.columns[1:]:
                 sty=sty.set_properties(subset=[c], **{"text-align":"right"})
 
+            # Display precision: market rows 2 decimals; spread rows whole numbers.
             market_rows={"India VIX","Spot","FAR Synthetic Future","NEAR Synthetic Future","FAR Straddle","NEAR Straddle"}
             for i,m in enumerate(df["Metric"].astype(str)):
                 if m in market_rows:
                     sty=sty.format({c:"{:.2f}" for c in df.columns[1:]}, subset=pd.IndexSlice[i,:])
-                elif m.isdigit():
-                    # Spread values are intentionally whole numbers.
+                elif "→" in m and "→" in m:
                     sty=sty.format({c:"{:.0f}" for c in df.columns[1:]}, subset=pd.IndexSlice[i,:])
 
             # Section headers.
@@ -570,30 +594,25 @@ else:
                 return [""]*len(row)
             sty=sty.apply(row_css, axis=1)
 
-            # Highlight the highest CE spread and highest PE spread for EACH date.
-            ce_mask=df["Metric"].astype(str).str.match(r"^\d+$")
-            # Find the PE section boundary; rows after it are PE rows.
-            pe_header_idx=next((i for i,m in enumerate(df["Metric"].astype(str)) if "PUT / PE" in m), len(df))
-            ce_indices=[i for i in range(pe_header_idx) if ce_mask.iloc[i]]
-            pe_indices=[i for i in range(pe_header_idx+1, len(df)) if str(df.iloc[i,0]).isdigit()]
-            highlight_css="background-color:#fff2a8; font-weight:700; border:1px solid #d9b300;"
-            if ce_indices:
-                for col in df.columns[1:]:
-                    vals=pd.to_numeric(df.loc[ce_indices,col], errors="coerce")
-                    if vals.notna().any():
-                        maxv=vals.max()
-                        for idx in vals[vals.eq(maxv)].index:
-                            sty=sty.set_properties(subset=pd.IndexSlice[idx,[col]], **{"background-color":"#fff2a8","font-weight":"700"})
-            if pe_indices:
-                for col in df.columns[1:]:
-                    vals=pd.to_numeric(df.loc[pe_indices,col], errors="coerce")
-                    if vals.notna().any():
-                        maxv=vals.max()
-                        for idx in vals[vals.eq(maxv)].index:
-                            sty=sty.set_properties(subset=pd.IndexSlice[idx,[col]], **{"background-color":"#fff2a8","font-weight":"700"})
+            if not do_highlight:
+                return sty
 
-            # Market movement: green if today's value is above previous date, red if below.
-            # Straddle rows are deliberately excluded from this formatting.
+            # Highest CE spread and highest PE spread for each date separately.
+            pe_header_idx=next((i for i,m in enumerate(df["Metric"].astype(str)) if "PUT / PE" in m), len(df))
+            ce_indices=[i for i in range(pe_header_idx) if "→" in str(df.iloc[i,0])]
+            pe_indices=[i for i in range(pe_header_idx+1, len(df)) if "→" in str(df.iloc[i,0])]
+            for indices in (ce_indices, pe_indices):
+                for col in df.columns[1:]:
+                    vals=pd.to_numeric(df.loc[indices,col], errors="coerce")
+                    if vals.notna().any():
+                        maxv=vals.max()
+                        for idx in vals[vals.eq(maxv)].index:
+                            sty=sty.set_properties(
+                                subset=pd.IndexSlice[idx,[col]],
+                                **{"background-color":"#fff2a8","font-weight":"700"}
+                            )
+
+            # Market movement: green above previous date, red below. No straddle formatting.
             movement_rows={"India VIX","Spot","FAR Synthetic Future","NEAR Synthetic Future"}
             for row_idx,m in enumerate(df["Metric"].astype(str)):
                 if m not in movement_rows:
@@ -601,8 +620,7 @@ else:
                 vals=pd.to_numeric(df.iloc[row_idx,1:], errors="coerce")
                 cols=list(df.columns[1:])
                 for j in range(1,len(cols)):
-                    prev=vals.iloc[j-1]
-                    cur=vals.iloc[j]
+                    prev=vals.iloc[j-1]; cur=vals.iloc[j]
                     if pd.notna(prev) and pd.notna(cur):
                         if cur>prev:
                             sty=sty.set_properties(subset=pd.IndexSlice[row_idx,[cols[j]]], **{"background-color":"#e8f5e9","color":"#137333","font-weight":"600"})
@@ -610,26 +628,31 @@ else:
                             sty=sty.set_properties(subset=pd.IndexSlice[row_idx,[cols[j]]], **{"background-color":"#ffebee","color":"#c62828","font-weight":"600"})
             return sty
 
-        # Keep the calculated matrix across Streamlit reruns (radio/column-width changes).
-        st.session_state["calendar_matrix"] = matrix.copy()
-
-        fit_mode=st.radio(
-            "Table width",
-            ["Auto-fit all columns", "Compact columns"],
-            horizontal=True,
-            key="cal_table_fit_mode",
-        )
-        matrix = st.session_state.get("calendar_matrix", matrix)
         if fit_mode=="Auto-fit all columns":
             col_cfg={"Metric":st.column_config.TextColumn("Metric",width="large")}
             for c in matrix.columns[1:]:
-                col_cfg[c]=st.column_config.NumberColumn(c,width="small",format="%.2f")
+                col_cfg[c]=st.column_config.TextColumn(c,width="small")
         else:
             col_cfg={"Metric":st.column_config.TextColumn("Metric",width="medium")}
             for c in matrix.columns[1:]:
-                col_cfg[c]=st.column_config.NumberColumn(c,width="small",format="%.2f")
+                col_cfg[c]=st.column_config.TextColumn(c,width="small")
+
+        # Use strings for display so the Styler controls 2-decimal / whole-number precision reliably.
+        display_matrix=matrix.copy()
+        for col in display_matrix.columns[1:]:
+            metric=display_matrix["Metric"].astype(str)
+            vals=pd.to_numeric(display_matrix[col],errors="coerce")
+            out=[]
+            for i,v in enumerate(vals):
+                m=metric.iloc[i]
+                if pd.isna(v): out.append("")
+                elif m in {"India VIX","Spot","FAR Synthetic Future","NEAR Synthetic Future","FAR Straddle","NEAR Straddle"}: out.append(f"{v:.2f}")
+                elif "→" in m: out.append(f"{v:.0f}")
+                else: out.append(str(v))
+            display_matrix[col]=out
+
         st.dataframe(
-            calendar_style(matrix),
+            calendar_style(display_matrix, highlight_on),
             width="stretch",
             height=560,
             hide_index=True,
