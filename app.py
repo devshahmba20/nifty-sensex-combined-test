@@ -424,6 +424,8 @@ else:
     with sm4: st.metric("India VIX", f"{snap_vix:.2f}" if np.isfinite(snap_vix) else "N/A")
     st.caption(f"View date: {snap_date}  •  {expiry1} Straddle: {snap_r1['straddle']:.2f}  •  {expiry2} Straddle: {snap_r2['straddle']:.2f}" if np.isfinite(snap_r1['straddle']) and np.isfinite(snap_r2['straddle']) else f"View date: {snap_date}")
 
+    step = NIFTY_STEP if instrument == "NIFTY" else SENSEX_STEP
+
     # Base strike can be selected automatically from the first selected date's locked synthetic future,
     # or manually overridden. This keeps strike selection flexible while preserving instrument strike steps.
     base_opts_df = day_options(cal_from, instrument)
