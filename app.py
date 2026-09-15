@@ -158,35 +158,35 @@ st.sidebar.divider()
 st.sidebar.caption("Click a section above. Only the selected section is shown.")
 
 # -----------------------------
-# DATE / EXPIRY SELECTION
+# DATE / EXPIRY SELECTION FOR MAIN STRATEGY / INDIVIDUAL ONLY
 # -----------------------------
-st.markdown('<div class="section-title">📅 Date & Expiry Selection</div>', unsafe_allow_html=True)
-dates=available_dates()
-if not dates:
-    st.error("No common NIFTY + SENSEX option dates are available in the database.")
-    st.stop()
+if page != "📅 Calendar Strategy":
+    dates=available_dates()
+    if not dates:
+        st.error("No common NIFTY + SENSEX option dates are available in the database.")
+        st.stop()
 
-c1,c2,c3=st.columns(3)
-with c1:
-    start_date=st.selectbox("Start Date",dates,index=max(0,len(dates)-20),key="main_start")
-with c2:
-    valid_end=[d for d in dates if d>=start_date]
-    end_date=st.selectbox("End Date",valid_end,index=len(valid_end)-1,key="main_end")
-with c3:
-    view_dates=[d for d in dates if start_date<=d<=end_date]
-    selected_date=st.selectbox("View Date",view_dates,index=len(view_dates)-1,key="main_view")
+    c1,c2,c3=st.columns(3)
+    with c1:
+        start_date=st.selectbox("Start Date",dates,index=max(0,len(dates)-20),key="main_start")
+    with c2:
+        valid_end=[d for d in dates if d>=start_date]
+        end_date=st.selectbox("End Date",valid_end,index=len(valid_end)-1,key="main_end")
+    with c3:
+        view_dates=[d for d in dates if start_date<=d<=end_date]
+        selected_date=st.selectbox("View Date",view_dates,index=len(view_dates)-1,key="main_view")
 
-n_expiries=expiry_values(selected_date,"NIFTY")
-s_expiries=expiry_values(selected_date,"SENSEX")
-if not n_expiries or not s_expiries:
-    st.error("Expiry data is not available for this date.")
-    st.stop()
+    n_expiries=expiry_values(selected_date,"NIFTY")
+    s_expiries=expiry_values(selected_date,"SENSEX")
+    if not n_expiries or not s_expiries:
+        st.error("Expiry data is not available for this date.")
+        st.stop()
 
-e1,e2=st.columns(2)
-with e1: nifty_exp=st.selectbox("NIFTY Expiry",n_expiries,key="main_n_exp")
-with e2: sensex_exp=st.selectbox("SENSEX Expiry",s_expiries,key="main_s_exp")
+    e1,e2=st.columns(2)
+    with e1: nifty_exp=st.selectbox("NIFTY Expiry",n_expiries,key="main_n_exp")
+    with e2: sensex_exp=st.selectbox("SENSEX Expiry",s_expiries,key="main_s_exp")
 
-n,s,vix,_=calculate_day(selected_date,nifty_exp,sensex_exp,3.30)
+    n,s,vix,_=calculate_day(selected_date,nifty_exp,sensex_exp,3.30)
 
 if page == "🎯 Strategy Tester":
     # -----------------------------
@@ -375,159 +375,150 @@ else:
     # CALENDAR STRATEGY ANALYSIS
     # -----------------------------
     st.markdown('<div class="main-title">Calendar Strategy Analysis</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">NIFTY / SENSEX • Two-expiry comparison • Flexible strikes • Analysis only</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Far Expiry × Near Expiry • Horizontal date matrix • Flexible strikes • Analysis only</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="section-title">📅 Calendar Settings</div>', unsafe_allow_html=True)
-    cal_dates = dates
-    # Compact controls: keep the whole setup visible without large vertical gaps.
-    c1,c2,c3,c4 = st.columns([1.0,1.5,1.5,1.2])
+    c1,c2,c3,c4=st.columns([1.0,1.45,1.45,1.0])
     with c1:
-        instrument = st.radio("Instrument", ["NIFTY", "SENSEX"], horizontal=True, key="cal_instrument")
+        instrument=st.radio("Instrument",["NIFTY","SENSEX"],horizontal=True,key="cal_instrument")
     with c2:
-        cal_from = st.selectbox("From Date", cal_dates, index=max(0, len(cal_dates)-15), key="cal_from")
+        cal_from=st.selectbox("From Date",dates,index=max(0,len(dates)-15),key="cal_from")
     with c3:
-        cal_valid_to = [d for d in cal_dates if d >= cal_from]
-        cal_to = st.selectbox("To Date", cal_valid_to, index=len(cal_valid_to)-1, key="cal_to")
+        cal_valid_to=[d for d in dates if d>=cal_from]
+        cal_to=st.selectbox("To Date",cal_valid_to,index=len(cal_valid_to)-1,key="cal_to")
     with c4:
-        cal_days_mode = st.selectbox("Number of Days", ["All available", 5, 10, 15, 20, 30, 60], index=0, key="cal_days_mode")
+        days_mode=st.selectbox("Days",["All available",5,10,15,20,30,60,90],key="cal_days")
 
-    selected_cal_dates = [d for d in cal_dates if cal_from <= d <= cal_to]
-    if cal_days_mode != "All available":
-        selected_cal_dates = selected_cal_dates[:int(cal_days_mode)]
-    st.caption(f"Analysis dates: {len(selected_cal_dates)} trading days")
+    selected_cal_dates=[d for d in dates if cal_from<=d<=cal_to]
+    if days_mode!="All available":
+        selected_cal_dates=selected_cal_dates[:int(days_mode)]
+    st.caption(f"Analysis: {len(selected_cal_dates)} trading days")
 
-    # Expiries are selected from the actual analysis start date.
-    cal_exp = expiry_values(cal_from, instrument)
-    if len(cal_exp) < 2:
+    # IMPORTANT: Expiry 1 is FAR, Expiry 2 is NEAR.
+    exp_list=expiry_values(cal_from,instrument)
+    if len(exp_list)<2:
         st.error("આ તારીખે ઓછામાં ઓછી 2 expiry ઉપલબ્ધ નથી.")
         st.stop()
-    ca1, ca2 = st.columns(2)
-    with ca1:
-        expiry1 = st.selectbox("Expiry 1 (Near)", cal_exp, index=0, key="cal_exp1")
-    with ca2:
-        expiry2_options = [e for e in cal_exp if e != expiry1]
-        expiry2 = st.selectbox("Expiry 2 (Far)", expiry2_options, index=0, key="cal_exp2")
+    x1,x2=st.columns(2)
+    with x1:
+        far_exp=st.selectbox("Expiry 1 — FAR",exp_list,index=min(1,len(exp_list)-1),key="cal_far")
+    with x2:
+        near_candidates=[e for e in exp_list if e!=far_exp]
+        near_exp=st.selectbox("Expiry 2 — NEAR",near_candidates,index=0,key="cal_near")
 
-    # Selected market date: spot/futures update immediately when the date changes.
-    snap_date = st.selectbox("Market / View Date", selected_cal_dates if selected_cal_dates else cal_dates, index=0, key="cal_snap_date")
-    snap_spot_n, snap_spot_s, snap_vix = market_values(snap_date)
-    snap_spot = snap_spot_n if instrument == "NIFTY" else snap_spot_s
-    snap_df = day_options(snap_date, instrument)
-    snap_step = NIFTY_STEP if instrument == "NIFTY" else SENSEX_STEP
-    snap_r1 = locked_straddle(snap_df, instrument, expiry1, snap_step, snap_spot)
-    snap_r2 = locked_straddle(snap_df, instrument, expiry2, snap_step, snap_spot)
+    # Market snapshot changes immediately with selected date.
+    snap_date=st.selectbox("Market / View Date",selected_cal_dates if selected_cal_dates else dates,index=0,key="cal_snap")
+    snap_n,snap_s,snap_vix=market_values(snap_date)
+    snap_spot=snap_n if instrument=="NIFTY" else snap_s
+    step_local=NIFTY_STEP if instrument=="NIFTY" else SENSEX_STEP
+    snap_df=day_options(snap_date,instrument)
+    far_snap=locked_straddle(snap_df,instrument,far_exp,step_local,snap_spot)
+    near_snap=locked_straddle(snap_df,instrument,near_exp,step_local,snap_spot)
+    q1,q2,q3,q4=st.columns(4)
+    q1.metric(f"{instrument} Spot",f"{snap_spot:.2f}" if np.isfinite(snap_spot) else "N/A")
+    q2.metric("FAR Synthetic Future",f"{far_snap['synthetic_future']:.2f}" if np.isfinite(far_snap['synthetic_future']) else "N/A")
+    q3.metric("NEAR Synthetic Future",f"{near_snap['synthetic_future']:.2f}" if np.isfinite(near_snap['synthetic_future']) else "N/A")
+    q4.metric("India VIX",f"{snap_vix:.2f}" if np.isfinite(snap_vix) else "N/A")
+    if np.isfinite(far_snap['straddle']) and np.isfinite(near_snap['straddle']):
+        st.caption(f"View date {snap_date} • FAR {far_exp} Straddle {far_snap['straddle']:.2f} • NEAR {near_exp} Straddle {near_snap['straddle']:.2f}")
 
-    sm1,sm2,sm3,sm4 = st.columns(4)
-    with sm1: st.metric(f"{instrument} Spot", f"{snap_spot:.2f}" if np.isfinite(snap_spot) else "N/A")
-    with sm2: st.metric(f"{expiry1} Synthetic Future", f"{snap_r1['synthetic_future']:.2f}" if np.isfinite(snap_r1['synthetic_future']) else "N/A")
-    with sm3: st.metric(f"{expiry2} Synthetic Future", f"{snap_r2['synthetic_future']:.2f}" if np.isfinite(snap_r2['synthetic_future']) else "N/A")
-    with sm4: st.metric("India VIX", f"{snap_vix:.2f}" if np.isfinite(snap_vix) else "N/A")
-    st.caption(f"View date: {snap_date}  •  {expiry1} Straddle: {snap_r1['straddle']:.2f}  •  {expiry2} Straddle: {snap_r2['straddle']:.2f}" if np.isfinite(snap_r1['straddle']) and np.isfinite(snap_r2['straddle']) else f"View date: {snap_date}")
+    st.markdown('<div class="section-title">🎯 Strike Settings</div>',unsafe_allow_html=True)
+    s1,s2,s3,s4,s5=st.columns([1.0,1.0,1.0,1.0,1.0])
+    with s1:
+        total_strikes=st.selectbox("Total Strike Pairs",[1,3,5,7,9,11,15,21],index=4,key="cal_total")
+    with s2:
+        adjacent_gap=st.number_input("Strike ↔ Strike Gap",min_value=float(step_local),value=float(step_local),step=float(step_local),format="%.0f",key="cal_adj_gap")
+    with s3:
+        ce_pe_gap=st.number_input("CE ↕ PE Gap",min_value=0.0,value=float(step_local*2),step=float(step_local),format="%.0f",key="cal_cepe_gap")
+    with s4:
+        ratio=st.number_input("Ratio",min_value=0.0,value=1.00,step=0.05,format="%.2f",key="cal_ratio")
+    with s5:
+        formula=st.selectbox("Spread Formula",["FAR − (NEAR × Ratio)","(FAR × Ratio) − NEAR"],key="cal_formula")
 
-    step = NIFTY_STEP if instrument == "NIFTY" else SENSEX_STEP
-
-    # Base strike can be selected automatically from the first selected date's locked synthetic future,
-    # or manually overridden. This keeps strike selection flexible while preserving instrument strike steps.
-    base_opts_df = day_options(cal_from, instrument)
-    available_strikes = sorted(base_opts_df["strike"].dropna().unique().tolist()) if not base_opts_df.empty else []
-    base_synth = locked_straddle(base_opts_df, instrument, expiry1, step, market_values(cal_from)[0] if instrument=="NIFTY" else market_values(cal_from)[1])["synthetic_future"]
-    auto_base = round_strike(base_synth, step) if np.isfinite(base_synth) else (available_strikes[len(available_strikes)//2] if available_strikes else np.nan)
-
-    st.markdown('<div class="section-title">🎯 Strike Selection</div>', unsafe_allow_html=True)
-    sb1, sb2, sb3 = st.columns(3)
-    with sb1:
-        strike_count = st.selectbox("Total Strikes", [1,3,5,7,9,11,15,21], index=4, key="cal_count")
-    with sb2:
-        strike_gap = st.number_input("CE ↔ PE Strike Gap", min_value=0.0, value=float(step*2), step=float(step), format="%.0f", key="cal_gap")
-    with sb3:
-        ratio = st.number_input("CE / PE Ratio", min_value=0.0, value=1.00, step=0.05, format="%.2f", key="cal_ratio")
-
-    if available_strikes:
-        base_default_idx = int(np.argmin(np.abs(np.asarray(available_strikes, dtype=float)-float(auto_base))) ) if np.isfinite(auto_base) else len(available_strikes)//2
-        base_strike = st.selectbox("Base Strike", available_strikes, index=base_default_idx, key="cal_base_strike")
-    else:
+    available=sorted(day_options(cal_from,instrument)["strike"].dropna().unique().tolist())
+    if not available:
         st.error("Selected date પર option strikes મળ્યા નથી.")
         st.stop()
+    auto_base=round_strike(far_snap["synthetic_future"],step_local) if np.isfinite(far_snap["synthetic_future"]) else available[len(available)//2]
+    base_idx=int(np.argmin(np.abs(np.asarray(available,dtype=float)-float(auto_base))))
+    b1,b2=st.columns(2)
+    with b1:
+        ce_base=st.selectbox("CE Base Strike",available,index=base_idx,key="cal_ce_base")
+    with b2:
+        pe_base=st.selectbox("PE Base Strike",available,index=max(0,min(len(available)-1,int(np.argmin(np.abs(np.asarray(available,dtype=float)-(float(ce_base)-ce_pe_gap))))),),key="cal_pe_base")
+    st.caption(f"CE base {ce_base:.0f} • PE base {pe_base:.0f} • adjacent strike gap {adjacent_gap:.0f} • CE↕PE gap setting {ce_pe_gap:.0f} • ratio {ratio:.2f}")
 
-    # Generate strike ladder around base strike. Odd counts keep the selected base in the middle.
-    count = int(strike_count)
-    offsets = list(range(-(count//2), count//2+1)) if count % 2 == 1 else list(range(-(count//2), count//2))
-    candidate_strikes = [int(round(base_strike + o*step)) for o in offsets]
-
-    st.caption(f"Base strike: {base_strike:.0f} • Total strikes: {count} • CE/PE gap: {strike_gap:.0f} • Ratio: {ratio:.2f}")
-
-    def synthetic_for_expiry(dt, symbol, expiry):
-        spot_n, spot_s, _ = market_values(dt)
-        spot = spot_n if symbol == "NIFTY" else spot_s
-        return locked_straddle(day_options(dt, symbol), symbol, expiry, NIFTY_STEP if symbol=="NIFTY" else SENSEX_STEP, spot)
-
-    def option_close(df, expiry, strike, typ):
+    def option_close(df,expiry,strike,typ):
         if df.empty: return np.nan
         q=df[(df["expiry"].eq(expiry)) & (df["strike"].eq(float(strike))) & (df["option_type"].eq(typ))]
-        if q.empty: return np.nan
-        return float(q.iloc[0]["close"])
+        return float(q.iloc[0]["close"]) if not q.empty else np.nan
 
-    @st.cache_data(show_spinner=False)
-    def calendar_range(dates_range, symbol, exp1, exp2, base, count, gap, ratio):
+    def spread_value(far,near,ratio,formula):
+        if not (np.isfinite(far) and np.isfinite(near)): return np.nan
+        return far-(near*ratio) if formula=="FAR − (NEAR × Ratio)" else (far*ratio)-near
+
+    # Horizontal matrix: one date per column, strike pairs down the rows.
+    def build_matrix(dates_range,symbol,far_exp,near_exp,ce_base,pe_base,count,adj_gap,cepe_gap,ratio,formula):
+        step=NIFTY_STEP if symbol=="NIFTY" else SENSEX_STEP
+        offsets=list(range(-(int(count)//2),int(count)//2+1)) if int(count)%2 else list(range(-(int(count)//2),int(count)//2))
+        ce_strikes=[int(round(float(ce_base)+o*float(adj_gap))) for o in offsets]
+        pe_strikes=[int(round(float(pe_base)+o*float(adj_gap))) for o in offsets]
+        # keep strikes on the instrument's actual strike grid
+        ce_strikes=[int(round(x/step)*step) for x in ce_strikes]
+        pe_strikes=[int(round(x/step)*step) for x in pe_strikes]
         rows=[]
-        step_local=NIFTY_STEP if symbol=="NIFTY" else SENSEX_STEP
-        offsets_local=list(range(-(int(count)//2), int(count)//2+1)) if int(count)%2==1 else list(range(-(int(count)//2), int(count)//2))
-        strikes_local=[int(round(base + o*step_local)) for o in offsets_local]
-        # Each strike row contains CE/PE values for both expiries. CE/PE are separated by the user-defined gap.
-        for dt in dates_range:
-            try:
-                spot_n, spot_s, vix = market_values(dt)
-                spot = spot_n if symbol=="NIFTY" else spot_s
-                df=day_options(dt,symbol)
-                r1=locked_straddle(df,symbol,exp1,step_local,spot)
-                r2=locked_straddle(df,symbol,exp2,step_local,spot)
-                for strike in strikes_local:
-                    pe_strike = int(round(strike - gap))
-                    ce1=option_close(df,exp1,strike,"CE")
-                    ce2=option_close(df,exp2,strike,"CE")
-                    pe1=option_close(df,exp1,pe_strike,"PE")
-                    pe2=option_close(df,exp2,pe_strike,"PE")
-                    if any(np.isfinite(x) for x in [ce1,ce2,pe1,pe2]):
-                        rows.append({
-                            "Date":dt,"India VIX":vix,"Strike":strike,"PE Strike":pe_strike,
-                            "Expiry 1":exp1,"Expiry 2":exp2,
-                            "Spot":spot,
-                            "Exp1 Synthetic Future":r1["synthetic_future"],"Exp2 Synthetic Future":r2["synthetic_future"],
-                            "Exp1 Straddle":r1["straddle"],"Exp2 Straddle":r2["straddle"],
-                            "CE Exp1":ce1,"CE Exp2":ce2,"CE Diff":ce2-ce1 if np.isfinite(ce1) and np.isfinite(ce2) else np.nan,
-                            "PE Exp1":pe1,"PE Exp2":pe2,"PE Diff":pe2-pe1 if np.isfinite(pe1) and np.isfinite(pe2) else np.nan,
-                            "CE/PE Ratio":ratio,
-                            "Calendar Value":(ce2-ce1)*ratio + (pe2-pe1) if np.isfinite(ce1) and np.isfinite(ce2) and np.isfinite(pe1) and np.isfinite(pe2) else np.nan
-                        })
-            except Exception:
-                continue
+        # market rows first
+        for label,fn in [
+            ("India VIX",lambda dt: market_values(dt)[2]),
+            ("Spot",lambda dt: market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1]),
+            ("FAR Synthetic Future",lambda dt: locked_straddle(day_options(dt,symbol),symbol,far_exp,step,market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1])["synthetic_future"]),
+            ("NEAR Synthetic Future",lambda dt: locked_straddle(day_options(dt,symbol),symbol,near_exp,step,market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1])["synthetic_future"]),
+            ("FAR Straddle",lambda dt: locked_straddle(day_options(dt,symbol),symbol,far_exp,step,market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1])["straddle"]),
+            ("NEAR Straddle",lambda dt: locked_straddle(day_options(dt,symbol),symbol,near_exp,step,market_values(dt)[0] if symbol=="NIFTY" else market_values(dt)[1])["straddle"]),
+        ]:
+            row={"Metric":label}
+            for dt in dates_range:
+                try: row[dt]=fn(dt)
+                except Exception: row[dt]=np.nan
+            rows.append(row)
+        rows.append({"Metric":"— CE / PE STRIKE PAIRS —",**{dt:np.nan for dt in dates_range}})
+        for i,(cs,ps) in enumerate(zip(ce_strikes,pe_strikes),1):
+            row={"Metric":f"CE {cs}  |  PE {ps}"}
+            for dt in dates_range:
+                try:
+                    df=day_options(dt,symbol)
+                    ce_far=option_close(df,far_exp,cs,"CE"); ce_near=option_close(df,near_exp,cs,"CE")
+                    pe_far=option_close(df,far_exp,ps,"PE"); pe_near=option_close(df,near_exp,ps,"PE")
+                    ce_sp=spread_value(ce_far,ce_near,ratio,formula)
+                    pe_sp=spread_value(pe_far,pe_near,ratio,formula)
+                    row[dt]=ce_sp-pe_sp if np.isfinite(ce_sp) and np.isfinite(pe_sp) else np.nan
+                except Exception: row[dt]=np.nan
+            rows.append(row)
         return pd.DataFrame(rows)
 
-    run_cal = st.button("Calculate Calendar Analysis", type="primary", key="run_calendar")
+    run_cal=st.button("Calculate Calendar Analysis",type="primary",key="run_calendar_final")
     if run_cal:
-        with st.spinner(f"Calculating {len(selected_cal_dates)} trading days..."):
-            cal = calendar_range(tuple(selected_cal_dates), instrument, expiry1, expiry2, float(base_strike), count, float(strike_gap), float(ratio))
-        if cal.empty:
-            st.error("Selected dates / strikes / expiries માટે usable option data મળ્યો નથી.")
-        else:
-            st.markdown('<div class="section-title">📊 Expiry Comparison</div>', unsafe_allow_html=True)
-            st.dataframe(cal, width="stretch", height=500, hide_index=True, column_config={
-                "Date": st.column_config.TextColumn(width="medium"),
-                "Spot": st.column_config.NumberColumn(format="%.2f"),
-                "India VIX": st.column_config.NumberColumn(format="%.2f"),
-                "Strike": st.column_config.NumberColumn(format="%.0f"),
-                "PE Strike": st.column_config.NumberColumn(format="%.0f"),
-                "Exp1 Synthetic Future": st.column_config.NumberColumn(format="%.2f"),
-                "Exp2 Synthetic Future": st.column_config.NumberColumn(format="%.2f"),
-                "Exp1 Straddle": st.column_config.NumberColumn(format="%.2f"),
-                "Exp2 Straddle": st.column_config.NumberColumn(format="%.2f"),
-                "CE Exp1": st.column_config.NumberColumn(format="%.2f"),
-                "CE Exp2": st.column_config.NumberColumn(format="%.2f"),
-                "CE Diff": st.column_config.NumberColumn(format="%.2f"),
-                "PE Exp1": st.column_config.NumberColumn(format="%.2f"),
-                "PE Exp2": st.column_config.NumberColumn(format="%.2f"),
-                "PE Diff": st.column_config.NumberColumn(format="%.2f"),
-                "CE/PE Ratio": st.column_config.NumberColumn(format="%.2f"),
-                "Calendar Value": st.column_config.NumberColumn(format="%.2f"),
-            })
-            st.download_button("Download Calendar CSV", cal.to_csv(index=False).encode("utf-8"), f"{instrument.lower()}_calendar_analysis.csv", "text/csv")
+        matrix=build_matrix(tuple(selected_cal_dates),instrument,far_exp,near_exp,float(ce_base),float(pe_base),int(total_strikes),float(adjacent_gap),float(ce_pe_gap),float(ratio),formula)
+        st.markdown('<div class="section-title">📊 Calendar Result — Dates Horizontal</div>',unsafe_allow_html=True)
+        st.caption("દરેક date ઉપર એક જ વાર છે. ઉપર market/future/straddle rows છે અને નીચે CE/PE strike pairs છે. Horizontal scrollથી વધુ dates જોઈ શકો છો.")
+        # transpose-like matrix with compact columns
+        st.dataframe(matrix,width="stretch",height=620,hide_index=True,column_config={"Metric":st.column_config.TextColumn("Metric",width="large")})
+
+        # Also provide separate CE and PE detail matrices so premiums and spread rates are transparent.
+        st.markdown('<div class="section-title">🔎 CE / PE Spread Detail</div>',unsafe_allow_html=True)
+        detail_rows=[]
+        step=NIFTY_STEP if instrument=="NIFTY" else SENSEX_STEP
+        offsets=list(range(-(int(total_strikes)//2),int(total_strikes)//2+1)) if int(total_strikes)%2 else list(range(-(int(total_strikes)//2),int(total_strikes)//2))
+        ce_strikes=[int(round(float(ce_base)+o*float(adjacent_gap))) for o in offsets]
+        pe_strikes=[int(round(float(pe_base)+o*float(adjacent_gap))) for o in offsets]
+        for cs,ps in zip(ce_strikes,pe_strikes):
+            for leg,stc,typ in [("CE",cs,"CE"),("PE",ps,"PE")]:
+                row={"Leg":leg,"Strike":stc}
+                for dt in selected_cal_dates:
+                    df=day_options(dt,instrument)
+                    f=option_close(df,far_exp,stc,typ); nval=option_close(df,near_exp,stc,typ)
+                    row[dt]=spread_value(f,nval,ratio,formula)
+                detail_rows.append(row)
+        detail=pd.DataFrame(detail_rows)
+        st.dataframe(detail,width="stretch",height=520,hide_index=True)
+        st.download_button("Download Calendar Matrix CSV",matrix.to_csv(index=False).encode("utf-8"),f"{instrument.lower()}_calendar_matrix.csv","text/csv")
