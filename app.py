@@ -431,14 +431,12 @@ else:
         st.caption(f"{snap_date} • FAR {far_exp} Straddle {far_snap['straddle']:.2f} • NEAR {near_exp} Straddle {near_snap['straddle']:.2f}")
 
     st.markdown('<div class="section-title">🎯 Strike Settings</div>', unsafe_allow_html=True)
-    s1,s2,s3,s4=st.columns([1.0,1.0,1.0,1.0])
+    s1,s2,s3=st.columns([1.0,1.0,1.0])
     with s1:
         total_strikes=st.selectbox("Total Strike Pairs",[1,3,5,7,9,11,15,21],index=4,key="cal_total")
     with s2:
         adjacent_gap=st.number_input("Strike ↔ Strike Gap",min_value=float(step_local),value=float(step_local),step=float(step_local),format="%.0f",key="cal_adj_gap")
     with s3:
-        ce_pe_gap=st.number_input("CE ↕ PE Gap",min_value=0.0,value=float(step_local*2),step=float(step_local),format="%.0f",key="cal_cepe_gap")
-    with s4:
         ratio=st.number_input("Ratio",min_value=0.0,value=1.00,step=0.05,format="%.2f",key="cal_ratio")
 
     formula=st.selectbox("Spread Formula",["FAR − (NEAR × Ratio)","(FAR × Ratio) − NEAR"],key="cal_formula")
@@ -454,9 +452,9 @@ else:
     with b1:
         ce_base=st.selectbox("CE Base Strike (ઉપર)",available,index=base_idx,key="cal_ce_base")
     with b2:
-        pe_default=int(np.argmin(np.abs(np.asarray(available,dtype=float)-(float(ce_base)-ce_pe_gap))))
+        pe_default=int(np.argmin(np.abs(np.asarray(available,dtype=float)-float(ce_base))))
         pe_base=st.selectbox("PE Base Strike (નીચે)",available,index=max(0,min(len(available)-1,pe_default)),key="cal_pe_base")
-    st.caption(f"CE base {ce_base:.0f} • PE base {pe_base:.0f} • side-by-side gap {adjacent_gap:.0f} • CE↕PE gap {ce_pe_gap:.0f} • ratio {ratio:.2f}")
+    st.caption(f"CE base {ce_base:.0f} • PE base {pe_base:.0f} • strike gap {adjacent_gap:.0f} • ratio {ratio:.2f}")
 
     def option_close_fast(df,expiry,strike,typ):
         if df.empty: return np.nan
@@ -468,7 +466,7 @@ else:
         return far-(near*ratio) if formula=="FAR − (NEAR × Ratio)" else (far*ratio)-near
 
     @st.cache_data(show_spinner=False)
-    def build_calendar_result(dates_range,symbol,far_exp,near_exp,ce_base,pe_base,count,adj_gap,cepe_gap,ratio,formula):
+    def build_calendar_result(dates_range,symbol,far_exp,near_exp,ce_base,pe_base,count,adj_gap,ratio,formula):
         """One pass over each date. CE and PE are separate rows; no repeated pair calculations."""
         step=NIFTY_STEP if symbol=="NIFTY" else SENSEX_STEP
         half=int(count)//2
@@ -491,9 +489,9 @@ else:
             row={"Metric":label}; row.update(dict(zip(dates_range,values))); rows.append(row)
 
         # Separate CE section: CE strike rows only.
-        rows.append({"Metric":"🟦 CALL / CE — Strike rows",**{dt:np.nan for dt in dates_range}})
+        rows.append({"Metric":"🟦 CALL / CE — Strike rows",**{dt:"" for dt in dates_range}})
         for cs in ce_strikes:
-            row={"Metric":f"CE {cs}"}
+            row={"Metric":f"{cs}"}
             for dt in dates_range:
                 df=day_map[dt]
                 f=option_close_fast(df,far_exp,cs,"CE"); nval=option_close_fast(df,near_exp,cs,"CE")
@@ -501,9 +499,9 @@ else:
             rows.append(row)
 
         # Separate PE section: PE strike rows only.
-        rows.append({"Metric":"🟥 PUT / PE — Strike rows",**{dt:np.nan for dt in dates_range}})
+        rows.append({"Metric":"🟥 PUT / PE — Strike rows",**{dt:"" for dt in dates_range}})
         for ps in pe_strikes:
-            row={"Metric":f"PE {ps}"}
+            row={"Metric":f"{ps}"}
             for dt in dates_range:
                 df=day_map[dt]
                 f=option_close_fast(df,far_exp,ps,"PE"); nval=option_close_fast(df,near_exp,ps,"PE")
@@ -515,7 +513,7 @@ else:
     run_cal=st.button("Calculate Calendar Analysis",type="primary",key="run_calendar_final")
     if run_cal:
         with st.spinner(f"Calculating {len(selected_cal_dates)} days × {int(total_strikes)*2} option legs..."):
-            matrix=build_calendar_result(tuple(selected_cal_dates),instrument,far_exp,near_exp,float(ce_base),float(pe_base),int(total_strikes),float(adjacent_gap),float(ce_pe_gap),float(ratio),formula)
+            matrix=build_calendar_result(tuple(selected_cal_dates),instrument,far_exp,near_exp,float(ce_base),float(pe_base),int(total_strikes),float(adjacent_gap),float(ratio),formula)
         st.markdown('<div class="section-title">📊 Calendar Result — Dates Horizontal</div>',unsafe_allow_html=True)
         st.caption("હવે CE અને PE અલગ છે: ઉપર CE strike rows અને નીચે PE strike rows. દરેક date એક જ column છે. Ratio બદલશો તો spread values બદલાશે.")
 
@@ -526,6 +524,13 @@ else:
                 sty=sty.set_properties(subset=["Metric"],**{"font-weight":"600"})
             for c in df.columns[1:]:
                 sty=sty.set_properties(subset=[c],**{"text-align":"right"})
+            # Market rows: exactly 2 decimals. CE/PE spread rows: whole numbers.
+            market_rows={"India VIX","Spot","FAR Synthetic Future","NEAR Synthetic Future","FAR Straddle","NEAR Straddle"}
+            for i,m in enumerate(df["Metric"].astype(str)):
+                if m in market_rows:
+                    sty=sty.format({c:"{:.2f}" for c in df.columns[1:]},subset=pd.IndexSlice[i,:])
+                elif m.isdigit():
+                    sty=sty.format({c:"{:.0f}" for c in df.columns[1:]},subset=pd.IndexSlice[i,:])
             # Section rows: visual separators.
             def row_css(row):
                 m=str(row.iloc[0])
