@@ -14,12 +14,16 @@ SENSEX_STEP = 100
 
 st.markdown("""
 <style>
-.main-title{font-size:34px;font-weight:800;letter-spacing:-1px;margin-bottom:2px}
-.subtitle{color:#6b7280;font-size:15px;margin-bottom:18px}
-.section-title{font-size:19px;font-weight:750;margin-top:6px;margin-bottom:5px}
-.formula-box{padding:14px 16px;border-radius:12px;background:#f6f7fb;border:1px solid #e5e7eb;font-family:monospace;font-size:15px}
-div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stHorizontalBlock"]){gap:0.5rem}
-div[data-testid="stMetric"]{padding:8px 10px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.main-title{font-size:30px;font-weight:800;letter-spacing:-1px;margin:0 0 2px 0}
+.subtitle{color:#6b7280;font-size:13px;margin:0 0 8px 0}
+.section-title{font-size:18px;font-weight:750;margin:4px 0 3px 0}
+.formula-box{padding:10px 12px;border-radius:10px;background:#f6f7fb;border:1px solid #e5e7eb;font-family:monospace;font-size:14px}
+div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stHorizontalBlock"]){gap:0.25rem}
+div[data-testid="stMetric"]{padding:5px 8px;border-radius:10px;border:1px solid #e5e7eb;background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.035)}
+div[data-testid="stMetricLabel"]{font-size:12px}
+div[data-testid="stMetricValue"]{font-size:24px}
+div[data-testid="stCaptionContainer"]{margin-top:0;margin-bottom:2px}
+hr{margin:8px 0}
 </style>
 """, unsafe_allow_html=True)
 
@@ -163,6 +167,43 @@ st.sidebar.divider()
 st.sidebar.caption("Click a section above. Only the selected section is shown.")
 
 # -----------------------------
+# LAYOUT CONTROLS
+# -----------------------------
+# Streamlit does not provide true drag/drop positioning of widgets. These controls
+# provide the practical equivalent: compact/normal page density and table height.
+# The choice is kept in session state so changing it does not clear calculations.
+if "layout_density" not in st.session_state:
+    st.session_state["layout_density"] = "Compact"
+if "global_table_height" not in st.session_state:
+    st.session_state["global_table_height"] = 520
+
+layout_density = st.sidebar.radio(
+    "Page layout",
+    ["Compact", "Normal"],
+    index=0 if st.session_state["layout_density"] == "Compact" else 1,
+    key="layout_density_control",
+)
+st.session_state["layout_density"] = layout_density
+
+global_table_height = st.sidebar.selectbox(
+    "Table height",
+    [360, 450, 520, 650, 760, 900],
+    index=[360,450,520,650,760,900].index(st.session_state["global_table_height"]),
+    key="global_table_height_control",
+)
+st.session_state["global_table_height"] = global_table_height
+
+if layout_density == "Normal":
+    st.markdown("""<style>
+    .main-title{font-size:34px;margin-bottom:4px}
+    .subtitle{font-size:15px;margin-bottom:14px}
+    .section-title{font-size:19px;margin-top:7px;margin-bottom:6px}
+    div[data-testid="stMetric"]{padding:8px 10px}
+    div[data-testid="stMetricValue"]{font-size:28px}
+    hr{margin:12px 0}
+    </style>""", unsafe_allow_html=True)
+
+# -----------------------------
 # SHARED AVAILABLE DATES
 # -----------------------------
 dates=available_dates()
@@ -261,7 +302,8 @@ if page == "🎯 Strategy Tester":
             st.subheader("Final Strategy Value")
             st.line_chart(bt.set_index("Date")[["Final Value"]],use_container_width=True)
             st.subheader("Backtest Data")
-            st.dataframe(bt,use_container_width=True,hide_index=True)
+            st.caption(f"Table height: {global_table_height}px • Sidebar માં Page layout અને Table height બદલી શકો છો.")
+            st.dataframe(bt,width="stretch",height=global_table_height,hide_index=True)
             st.download_button("Download Backtest CSV",bt.to_csv(index=False).encode("utf-8"),"strategy_backtest.csv","text/csv")
 
 
@@ -354,7 +396,7 @@ elif page == "📈 Individual Straddle":
                 sty = sty.set_properties(subset=['Date'], **{'font-weight':'600'})
             return sty
 
-        st.caption("💡 Table full-width છે અને columns ને mouse થી drag કરીને તમારી જરૂર મુજબ resize કરી શકો છો. નીચે horizontal scroll પણ મળશે.")
+        st.caption(f"💡 Table full-width છે. Columns mouse થી resize કરી શકો છો. Table height: {global_table_height}px. Sidebar માં Compact/Normal બદલો.")
         display_ind = ind.copy()
         for c in ['India VIX','NIFTY Spot','NIFTY Synthetic Future','NIFTY Final Strike','NIFTY Straddle',
                   'SENSEX Spot','SENSEX Synthetic Future','SENSEX Final Strike','SENSEX Straddle']:
@@ -364,7 +406,7 @@ elif page == "📈 Individual Straddle":
         st.dataframe(
             style_result_table(display_ind),
             width="stretch",
-            height=520,
+            height=global_table_height,
             hide_index=True,
             column_config={
                 "Date": st.column_config.TextColumn("Date", width="medium"),
@@ -575,7 +617,7 @@ else:
     matrix = st.session_state.get("calendar_matrix")
     if matrix is not None and not matrix.empty:
         st.markdown('<div class="section-title">📊 Calendar Result — Dates Horizontal</div>',unsafe_allow_html=True)
-        st.caption("CE અને PE અલગ sectionsમાં છે. દરેક date એક column છે. Ratio બદલશો તો નવી calculation માટે Calculate દબાવો.")
+        st.caption("CE અને PE અલગ sectionsમાં છે. દરેક date એક column છે. Ratio બદલશો તો નવી calculation માટે Calculate દબાવો. Sidebar માં page density અને table height પણ બદલી શકો છો.")
 
         d1,d2=st.columns([1.0,1.0])
         with d1:
