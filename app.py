@@ -19,7 +19,7 @@ st.markdown("""
 .section-title{font-size:18px;font-weight:750;margin:4px 0 3px 0}
 .formula-box{padding:10px 12px;border-radius:10px;background:#f6f7fb;border:1px solid #e5e7eb;font-family:monospace;font-size:14px}
 /* Global compact layout: applies to Strategy Tester, Individual Straddle and Calendar */
-.block-container{padding-top:1.0rem;padding-bottom:1rem;padding-left:1.1rem;padding-right:1.1rem;max-width:100%}
+.block-container{padding-top:1.8rem;padding-bottom:1rem;padding-left:1.1rem;padding-right:1.1rem;max-width:100%}
 div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stHorizontalBlock"]){gap:0.18rem}
 div[data-testid="stHorizontalBlock"]{gap:0.35rem}
 div[data-testid="stForm"]{padding:0.35rem 0.45rem}
@@ -27,8 +27,8 @@ div[data-testid="stMetric"]{padding:4px 7px;margin:0;border-radius:8px;border:1p
 div[data-testid="stMetricLabel"]{font-size:11px;line-height:1.1}
 div[data-testid="stMetricValue"]{font-size:22px;line-height:1.15}
 div[data-testid="stCaptionContainer"]{margin-top:0;margin-bottom:1px;line-height:1.15}
-label[data-testid="stWidgetLabel"]{margin-bottom:0.08rem}
-div[data-testid="stWidgetLabel"] p{font-size:11px;line-height:1.1;margin-bottom:0}
+label[data-testid="stWidgetLabel"]{margin-top:0.08rem;margin-bottom:0.12rem}
+div[data-testid="stWidgetLabel"] p{font-size:11px;line-height:1.35;margin-top:0;margin-bottom:0;padding-top:1px}
 div[data-testid="stSelectbox"]>div,div[data-testid="stNumberInput"]>div,div[data-testid="stDateInput"]>div{margin-bottom:0.1rem}
 div[data-testid="stRadio"]{margin-bottom:0.05rem}
 div[data-testid="stButton"]{margin-top:0.15rem;margin-bottom:0.15rem}
