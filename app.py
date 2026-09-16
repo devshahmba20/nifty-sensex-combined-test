@@ -231,7 +231,9 @@ if page != "📅 Calendar Strategy":
         st.error("No common NIFTY + SENSEX option dates are available in the database.")
         st.stop()
 
-    c1,c2,c3=st.columns(3)
+    # Keep the primary controls on one compact desktop row.
+    # Strategy Tester also keeps the NIFTY multiplier beside the expiry controls.
+    c1,c2,c3,c4,c5,c6 = st.columns([1.05,1.05,1.05,1.15,1.15,0.80])
     with c1:
         start_date=st.selectbox("Start Date",dates,index=max(0,len(dates)-20),key="main_start")
     with c2:
@@ -247,11 +249,17 @@ if page != "📅 Calendar Strategy":
         st.error("Expiry data is not available for this date.")
         st.stop()
 
-    e1,e2=st.columns(2)
-    with e1: nifty_exp=st.selectbox("NIFTY Expiry",n_expiries,key="main_n_exp")
-    with e2: sensex_exp=st.selectbox("SENSEX Expiry",s_expiries,key="main_s_exp")
+    with c4:
+        nifty_exp=st.selectbox("NIFTY Expiry",n_expiries,key="main_n_exp")
+    with c5:
+        sensex_exp=st.selectbox("SENSEX Expiry",s_expiries,key="main_s_exp")
+    if page == "🎯 Strategy Tester":
+        with c6:
+            multiplier = st.number_input("NIFTY Multiplier", min_value=0.0, value=3.30, step=0.05, format="%.2f", key="main_multiplier")
+    else:
+        multiplier = 3.30
 
-    n,s,vix,_=calculate_day(selected_date,nifty_exp,sensex_exp,3.30)
+    n,s,vix,_=calculate_day(selected_date,nifty_exp,sensex_exp,multiplier)
 
 if page == "🎯 Strategy Tester":
     # -----------------------------
@@ -260,7 +268,6 @@ if page == "🎯 Strategy Tester":
     st.markdown('<div class="section-title">🎯 NIFTY × SENSEX Strategy Tester</div>', unsafe_allow_html=True)
     st.caption("Existing strategy logic is kept unchanged. The Individual Straddle Analysis is added separately below.")
 
-    multiplier = st.number_input("NIFTY Multiplier", min_value=0.0, value=3.30, step=0.05, format="%.2f", key="main_multiplier")
     final_value = s["straddle"] - (n["straddle"] * multiplier) if np.isfinite(s["straddle"]) and np.isfinite(n["straddle"]) else np.nan
 
     st.caption("Selected setup: NIFTY " + str(nifty_exp) + " • SENSEX " + str(sensex_exp) + " • Multiplier " + f"{multiplier:.2f}")
