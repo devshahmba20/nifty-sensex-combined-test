@@ -19,7 +19,7 @@ st.markdown("""
 .section-title{font-size:18px;font-weight:750;margin:4px 0 3px 0}
 .formula-box{padding:10px 12px;border-radius:10px;background:#f6f7fb;border:1px solid #e5e7eb;font-family:monospace;font-size:14px}
 /* Global compact layout: applies to Strategy Tester, Individual Straddle and Calendar */
-.block-container{padding-top:1.8rem;padding-bottom:1rem;padding-left:1.1rem;padding-right:1.1rem;max-width:100%}
+.block-container{padding-top:2.55rem;padding-bottom:1rem;padding-left:1.1rem;padding-right:1.1rem;max-width:100%}
 div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stHorizontalBlock"]){gap:0.18rem}
 div[data-testid="stHorizontalBlock"]{gap:0.35rem}
 div[data-testid="stForm"]{padding:0.35rem 0.45rem}
@@ -28,7 +28,7 @@ div[data-testid="stMetricLabel"]{font-size:11px;line-height:1.1}
 div[data-testid="stMetricValue"]{font-size:22px;line-height:1.15}
 div[data-testid="stCaptionContainer"]{margin-top:0;margin-bottom:1px;line-height:1.15}
 label[data-testid="stWidgetLabel"]{margin-top:0.08rem;margin-bottom:0.12rem}
-div[data-testid="stWidgetLabel"] p{font-size:11px;line-height:1.35;margin-top:0;margin-bottom:0;padding-top:1px}
+div[data-testid="stWidgetLabel"] p{font-size:11px;line-height:1.35;margin-top:0;margin-bottom:0;padding-top:2px;overflow:visible}
 div[data-testid="stSelectbox"]>div,div[data-testid="stNumberInput"]>div,div[data-testid="stDateInput"]>div{margin-bottom:0.1rem}
 div[data-testid="stRadio"]{margin-bottom:0.05rem}
 div[data-testid="stButton"]{margin-top:0.15rem;margin-bottom:0.15rem}
@@ -205,6 +205,15 @@ global_table_height = st.sidebar.selectbox(
 )
 st.session_state["global_table_height"] = global_table_height
 
+global_table_fit = st.sidebar.radio(
+    "Table width",
+    ["Auto-fit all columns", "Compact columns"],
+    index=0 if st.session_state.get("global_table_fit", "Auto-fit all columns") == "Auto-fit all columns" else 1,
+    key="global_table_fit_control",
+    help="Aa setting Strategy Tester, Individual Straddle ane Calendar na tables par lagu pade chhe. Auto-fit ma columns mota; Compact ma ochhi width."
+)
+st.session_state["global_table_fit"] = global_table_fit
+
 if layout_density == "Normal":
     st.markdown("""<style>
     .main-title{font-size:34px;margin-bottom:4px}
@@ -322,7 +331,11 @@ if page == "🎯 Strategy Tester":
             st.line_chart(bt.set_index("Date")[["Final Value"]],use_container_width=True)
             st.subheader("Backtest Data")
             st.caption(f"Table height: {global_table_height}px • Sidebar માં Page layout અને Table height બદલી શકો છો.")
-            st.dataframe(bt,width="stretch",height=global_table_height,hide_index=True)
+            bt_col_width = "medium" if global_table_fit == "Auto-fit all columns" else "small"
+            bt_col_cfg = {c: st.column_config.NumberColumn(c, width=bt_col_width) for c in bt.columns if c != "Date"}
+            if "Date" in bt.columns:
+                bt_col_cfg["Date"] = st.column_config.TextColumn("Date", width="medium" if global_table_fit == "Auto-fit all columns" else "small")
+            st.dataframe(bt,width="stretch",height=global_table_height,hide_index=True,column_config=bt_col_cfg)
             st.download_button("Download Backtest CSV",bt.to_csv(index=False).encode("utf-8"),"strategy_backtest.csv","text/csv")
 
 
@@ -422,23 +435,25 @@ elif page == "📈 Individual Straddle":
             if c in display_ind.columns:
                 display_ind[c] = pd.to_numeric(display_ind[c], errors='coerce')
 
+        ind_w = "medium" if global_table_fit == "Auto-fit all columns" else "small"
+        ind_col_cfg = {
+            "Date": st.column_config.TextColumn("Date", width=ind_w),
+            "India VIX": st.column_config.NumberColumn("India VIX", format="%.2f", width="small"),
+            "NIFTY Spot": st.column_config.NumberColumn("NIFTY Spot", format="%.2f", width=ind_w),
+            "NIFTY Synthetic Future": st.column_config.NumberColumn("NIFTY Synthetic Future", format="%.2f", width=ind_w),
+            "NIFTY Final Strike": st.column_config.NumberColumn("NIFTY Final Strike", format="%.0f", width=ind_w),
+            "NIFTY Straddle": st.column_config.NumberColumn("NIFTY Straddle", format="%.2f", width=ind_w),
+            "SENSEX Spot": st.column_config.NumberColumn("SENSEX Spot", format="%.2f", width=ind_w),
+            "SENSEX Synthetic Future": st.column_config.NumberColumn("SENSEX Synthetic Future", format="%.2f", width=ind_w),
+            "SENSEX Final Strike": st.column_config.NumberColumn("SENSEX Final Strike", format="%.0f", width=ind_w),
+            "SENSEX Straddle": st.column_config.NumberColumn("SENSEX Straddle", format="%.2f", width=ind_w),
+        }
         st.dataframe(
             style_result_table(display_ind),
             width="stretch",
             height=global_table_height,
             hide_index=True,
-            column_config={
-                "Date": st.column_config.TextColumn("Date", width="medium"),
-                "India VIX": st.column_config.NumberColumn("India VIX", format="%.2f", width="small"),
-                "NIFTY Spot": st.column_config.NumberColumn("NIFTY Spot", format="%.2f", width="medium"),
-                "NIFTY Synthetic Future": st.column_config.NumberColumn("NIFTY Synthetic Future", format="%.2f", width="medium"),
-                "NIFTY Final Strike": st.column_config.NumberColumn("NIFTY Final Strike", format="%.0f", width="medium"),
-                "NIFTY Straddle": st.column_config.NumberColumn("NIFTY Straddle", format="%.2f", width="medium"),
-                "SENSEX Spot": st.column_config.NumberColumn("SENSEX Spot", format="%.2f", width="medium"),
-                "SENSEX Synthetic Future": st.column_config.NumberColumn("SENSEX Synthetic Future", format="%.2f", width="medium"),
-                "SENSEX Final Strike": st.column_config.NumberColumn("SENSEX Final Strike", format="%.0f", width="medium"),
-                "SENSEX Straddle": st.column_config.NumberColumn("SENSEX Straddle", format="%.2f", width="medium"),
-            },
+            column_config=ind_col_cfg,
         )
         st.download_button('Download Individual Straddle CSV',ind.to_csv(index=False).encode('utf-8'),'individual_straddles.csv','text/csv')
 
@@ -636,7 +651,7 @@ else:
     matrix = st.session_state.get("calendar_matrix")
     if matrix is not None and not matrix.empty:
         st.markdown('<div class="section-title">📊 Calendar Result — Dates Horizontal</div>',unsafe_allow_html=True)
-        st.caption("CE અને PE અલગ sectionsમાં છે. દરેક date એક column છે. Ratio બદલશો તો નવી calculation માટે Calculate દબાવો. Sidebar માં page density અને table height પણ બદલી શકો છો.")
+        st.caption("CE અને PE અલગ sectionsમાં છે. દરેક date એક column છે. Ratio બદલશો તો નવી calculation માટે Calculate દબાવો. Sidebar માં page density, table height ane global table width પણ બદલી શકો છો.")
 
         d1,d2=st.columns([1.0,1.0])
         with d1:
