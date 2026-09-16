@@ -18,12 +18,24 @@ st.markdown("""
 .subtitle{color:#6b7280;font-size:13px;margin:0 0 8px 0}
 .section-title{font-size:18px;font-weight:750;margin:4px 0 3px 0}
 .formula-box{padding:10px 12px;border-radius:10px;background:#f6f7fb;border:1px solid #e5e7eb;font-family:monospace;font-size:14px}
-div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stHorizontalBlock"]){gap:0.25rem}
-div[data-testid="stMetric"]{padding:5px 8px;border-radius:10px;border:1px solid #e5e7eb;background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.035)}
-div[data-testid="stMetricLabel"]{font-size:12px}
-div[data-testid="stMetricValue"]{font-size:24px}
-div[data-testid="stCaptionContainer"]{margin-top:0;margin-bottom:2px}
-hr{margin:8px 0}
+/* Global compact layout: applies to Strategy Tester, Individual Straddle and Calendar */
+.block-container{padding-top:1.0rem;padding-bottom:1rem;padding-left:1.1rem;padding-right:1.1rem;max-width:100%}
+div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stHorizontalBlock"]){gap:0.18rem}
+div[data-testid="stHorizontalBlock"]{gap:0.35rem}
+div[data-testid="stForm"]{padding:0.35rem 0.45rem}
+div[data-testid="stMetric"]{padding:4px 7px;margin:0;border-radius:8px;border:1px solid #e5e7eb;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.03)}
+div[data-testid="stMetricLabel"]{font-size:11px;line-height:1.1}
+div[data-testid="stMetricValue"]{font-size:22px;line-height:1.15}
+div[data-testid="stCaptionContainer"]{margin-top:0;margin-bottom:1px;line-height:1.15}
+label[data-testid="stWidgetLabel"]{margin-bottom:0.08rem}
+div[data-testid="stWidgetLabel"] p{font-size:11px;line-height:1.1;margin-bottom:0}
+div[data-testid="stSelectbox"]>div,div[data-testid="stNumberInput"]>div,div[data-testid="stDateInput"]>div{margin-bottom:0.1rem}
+div[data-testid="stRadio"]{margin-bottom:0.05rem}
+div[data-testid="stButton"]{margin-top:0.15rem;margin-bottom:0.15rem}
+h1{margin-top:0.2rem!important;margin-bottom:0.35rem!important}
+h2{margin-top:0.45rem!important;margin-bottom:0.25rem!important}
+h3{margin-top:0.35rem!important;margin-bottom:0.2rem!important}
+hr{margin:5px 0}
 </style>
 """, unsafe_allow_html=True)
 
