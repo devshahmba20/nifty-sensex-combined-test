@@ -321,22 +321,31 @@ if page == "🎯 Strategy Tester":
 
     if run:
         with st.spinner(f"Calculating {len(view_dates)} trading days..."):
-            bt=run_backtest(view_dates,bt_nifty_exp,bt_sensex_exp,multiplier)
+            st.session_state["main_backtest_data"] = run_backtest(view_dates,bt_nifty_exp,bt_sensex_exp,multiplier)
+        st.session_state["main_backtest_signature"] = (tuple(view_dates), bt_nifty_exp, bt_sensex_exp, float(multiplier))
+
+    bt = st.session_state.get("main_backtest_data")
+    if bt is not None:
         if bt.empty:
             st.error("No matching historical rows were found for this expiry combination.")
         else:
-            q1,q2,q3,q4=st.columns(4)
+            q1,q2,q3,q4=st.columns(4);
             q1.metric("Days",len(bt)); q2.metric("Average",f"{bt['Final Value'].mean():.2f}"); q3.metric("Maximum",f"{bt['Final Value'].max():.2f}"); q4.metric("Minimum",f"{bt['Final Value'].min():.2f}")
             st.subheader("Final Strategy Value")
             st.line_chart(bt.set_index("Date")[["Final Value"]],use_container_width=True)
             st.subheader("Backtest Data")
             st.caption(f"Table height: {global_table_height}px • Sidebar માં Page layout અને Table height બદલી શકો છો.")
-            bt_col_width = "medium" if global_table_fit == "Auto-fit all columns" else "small"
-            bt_col_cfg = {c: st.column_config.NumberColumn(c, width=bt_col_width) for c in bt.columns if c != "Date"}
+            # Auto-fit uses content-sized columns; Compact uses the smallest practical table footprint.
+            bt_col_cfg = {}
             if "Date" in bt.columns:
                 bt_col_cfg["Date"] = st.column_config.TextColumn("Date", width="medium" if global_table_fit == "Auto-fit all columns" else "small")
-            st.dataframe(bt,width="stretch",height=global_table_height,hide_index=True,column_config=bt_col_cfg)
+            for c in bt.columns:
+                if c != "Date":
+                    bt_col_cfg[c] = st.column_config.NumberColumn(c, width="medium" if global_table_fit == "Auto-fit all columns" else "small")
+            bt_table_width = "stretch" if global_table_fit == "Auto-fit all columns" else "content"
+            st.dataframe(bt,width=bt_table_width,height=global_table_height,hide_index=True,column_config=bt_col_cfg)
             st.download_button("Download Backtest CSV",bt.to_csv(index=False).encode("utf-8"),"strategy_backtest.csv","text/csv")
+
 
 
 elif page == "📈 Individual Straddle":
@@ -448,9 +457,10 @@ elif page == "📈 Individual Straddle":
             "SENSEX Final Strike": st.column_config.NumberColumn("SENSEX Final Strike", format="%.0f", width=ind_w),
             "SENSEX Straddle": st.column_config.NumberColumn("SENSEX Straddle", format="%.2f", width=ind_w),
         }
+        ind_table_width = "stretch" if global_table_fit == "Auto-fit all columns" else "content"
         st.dataframe(
             style_result_table(display_ind),
-            width="stretch",
+            width=ind_table_width,
             height=global_table_height,
             hide_index=True,
             column_config=ind_col_cfg,
@@ -655,12 +665,7 @@ else:
 
         d1,d2=st.columns([1.0,1.0])
         with d1:
-            fit_mode=st.radio(
-                "Table width",
-                ["Auto-fit all columns", "Compact columns"],
-                horizontal=True,
-                key="cal_table_fit_mode",
-            )
+            st.caption(f"Table width: **{global_table_fit}** (Sidebar setting)" )
         with d2:
             highlight_on=st.checkbox(
                 "Highlight highest spread + market movement",
@@ -720,7 +725,7 @@ else:
                             sty=sty.set_properties(subset=pd.IndexSlice[row_idx,[cols[j]]], **{"background-color":"#ffebee","color":"#c62828","font-weight":"600"})
             return sty
 
-        if fit_mode=="Auto-fit all columns":
+        if global_table_fit=="Auto-fit all columns":
             col_cfg={"Metric":st.column_config.TextColumn("Metric",width="large")}
             for c in matrix.columns[1:]:
                 col_cfg[c]=st.column_config.TextColumn(c,width="small")
@@ -743,9 +748,10 @@ else:
                 else: out.append(str(v))
             display_matrix[col]=out
 
+        cal_table_width = "stretch" if global_table_fit == "Auto-fit all columns" else "content"
         st.dataframe(
             calendar_style(display_matrix, highlight_on),
-            width="stretch",
+            width=cal_table_width,
             height=760,
             hide_index=True,
             column_config=col_cfg,
