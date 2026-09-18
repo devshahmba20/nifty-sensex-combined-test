@@ -1517,18 +1517,15 @@ setSensexExpiry((current) =>
                               <input
                                 type="checkbox"
                                 checked={checked}
-                                onChange={() => {
-                                  setVisibleBacktestColumns((current) =>
-                                    checked
-                                      ? current.filter(
-                                          (key) => key !== column.key
-                                        )
-                                      : [
-                                          ...current,
-                                          column.key,
-                                        ]
-                                  );
-                                }}
+ onChange={() => {
+  const nextColumns: BacktestDisplayColumn[] = checked
+    ? visibleBacktestColumns.filter(
+        (key: BacktestDisplayColumn) => key !== column.key
+      )
+    : [...visibleBacktestColumns, column.key];
+
+  setVisibleBacktestColumns(nextColumns);
+}}  
                               />
                               <span>
                                 {column.key === "adjusted_nifty"
@@ -2568,7 +2565,12 @@ function CalendarModule() {
       if (!response.ok) throw new Error(data.detail || "Calendar calculation failed.");
       const resultRows = Array.isArray(data.rows) ? data.rows : [];
       setRows(resultRows);
-      await loadDateSnapshots(Array.from(new Set(resultRows.map((r: CalendarRow) => r.Date))).sort());
+     const calendarDates: string[] = resultRows.map(
+  (r: CalendarRow) => r.Date
+);
+await loadDateSnapshots(
+  Array.from(new Set<string>(calendarDates)).sort()
+);
       await loadViewDate();
       if (!data.rows?.length) setError("No calendar data found from View Date for the selected strikes/expiries.");
     } catch (e) {
