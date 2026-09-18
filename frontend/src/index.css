@@ -1,0 +1,70 @@
+/* OPTIONS LAB - ROOT / FULL SCREEN LAYOUT RESET */
+
+:root {
+  font-family: Inter, Arial, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* Important: remove Vite's default centered/max-width root */
+#root {
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Let the application occupy the complete viewport */
+.app {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* Desktop: sidebar + full remaining workspace */
+.main {
+  min-width: 0;
+}
+
+/* Keep wide tables inside their own scroll area */
+.table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Responsive */
+@media (max-width: 800px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    overflow-x: hidden;
+  }
+}
