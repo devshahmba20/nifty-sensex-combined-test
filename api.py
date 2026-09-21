@@ -25,6 +25,7 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://localhost:5174",
         "http://127.0.0.1:5174",
+        "https://nifty-sensex-dashboard-chfn.onrender.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -867,6 +868,60 @@ def calendar(
         "rows": rows,
         "count": len(rows),
     }
+
+
+# ---------------------------------------------------------------------------
+# FRONTEND COMPATIBILITY ENDPOINTS
+# These preserve the existing Strategy Tester / Calendar frontend contracts.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/expiry-range")
+def expiry_range(start_date: str, end_date: str):
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="start_date cannot be after end_date")
+
+    nifty = set()
+    sensex = set()
+
+    for dt in available_dates():
+        if start_date <= dt <= end_date:
+            ndf = day_options(dt, "NIFTY")
+            sdf = day_options(dt, "SENSEX")
+            if not ndf.empty:
+                nifty.update(ndf["expiry"].dropna().astype(str).tolist())
+            if not sdf.empty:
+                sensex.update(sdf["expiry"].dropna().astype(str).tolist())
+
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "nifty": sorted(nifty),
+        "sensex": sorted(sensex),
+    }
+
+
+@app.get("/api/calendar/setups")
+def calendar_setups():
+    return {
+        "setups": [
+            "ATM CE",
+            "ATM PE",
+            "ATM +500 CE",
+            "ATM -500 PE",
+        ],
+        "rules": {
+            "atm_step": 100,
+            "strike_gap_excluded": 50,
+            "expiry_gap_days": [5, 9],
+            "min_near_dte": 9,
+            "entry_ratio_min": 1.05,
+            "entry_ratio_max": 1.30,
+            "exit_ratio": 1.45,
+            "first_qualifying_day_only": True,
+            "re_entry": False,
+        },
+    }
+
 
 @app.get("/api/diagonal-expiries")
 def diagonal_expiries(symbol: str, start_date: str, end_date: str):
