@@ -610,7 +610,7 @@ const themes = [
   ["light", "Light"],
 ];
 
-const API = "https://nifty-sensex-api.onrender.com";
+const API = "https://nifty-sensex-api-v2.onrender.com";
 
 type MarketData = {
   date: string;
