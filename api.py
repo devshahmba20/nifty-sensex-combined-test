@@ -467,6 +467,25 @@ def individual(
     }
 
 
+@app.get("/api/diagonal-expiries")
+def diagonal_expiries(symbol: str, start_date: str, end_date: str):
+    """Return every unique expiry visible in the selected date range."""
+    symbol = symbol.upper().strip()
+    if symbol not in {"NIFTY", "SENSEX"}:
+        raise HTTPException(status_code=400, detail="symbol must be NIFTY or SENSEX")
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="start_date cannot be after end_date")
+
+    found = set()
+    for dt in available_dates():
+        if start_date <= dt <= end_date:
+            df = day_options(dt, symbol)
+            if not df.empty and "expiry" in df.columns:
+                found.update(df["expiry"].dropna().astype(str).unique().tolist())
+
+    return {"symbol": symbol, "start_date": start_date, "end_date": end_date, "expiries": sorted(found)}
+
+
 @app.get("/api/diagonal")
 def diagonal(
     symbol: str,

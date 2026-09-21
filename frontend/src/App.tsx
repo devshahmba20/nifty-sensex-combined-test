@@ -1066,7 +1066,7 @@ setSensexExpiry((current) =>
       setApiError("");
 
       const params = new URLSearchParams({
-        start_date: startDate,
+        start_date: viewDate,
         end_date: endDate,
         nifty_expiry: niftyExpiry,
         sensex_expiry: sensexExpiry,
@@ -1518,13 +1518,14 @@ setSensexExpiry((current) =>
                                 type="checkbox"
                                 checked={checked}
                                 onChange={() => {
-const nextColumns: BacktestDisplayColumn[] = checked
+                                  const nextColumns: BacktestDisplayColumn[] = checked
   ? visibleBacktestColumns.filter(
       (key: BacktestDisplayColumn) => key !== column.key
     )
   : [...visibleBacktestColumns, column.key];
 
-setVisibleBacktestColumns(nextColumns);                                }}
+setVisibleBacktestColumns(nextColumns);
+                                }}
                               />
                               <span>
                                 {column.key === "adjusted_nifty"
@@ -2293,6 +2294,7 @@ function DiagonalModule() {
   const [symbol, setSymbol] = useState("NIFTY");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [viewDate, setViewDate] = useState("");
   const [earlierExpiry, setEarlierExpiry] = useState("");
   const [laterExpiry, setLaterExpiry] = useState("");
   const [expiries, setExpiries] = useState<string[]>([]);
@@ -2324,7 +2326,7 @@ function DiagonalModule() {
         if (loaded.length) {
           setStartDate(loaded[Math.max(0, loaded.length - 20)]);
           setEndDate(loaded[loaded.length - 1]);
-        }
+                  }
       } catch {
         setError("Unable to load dates.");
       }
@@ -2333,24 +2335,33 @@ function DiagonalModule() {
   }, []);
 
   useEffect(() => {
-    if (!startDate) return;
+    if (!startDate || !endDate) return;
     async function loadExpiries() {
       try {
-        const response = await fetch(`${API}/api/expiries/${startDate}`);
+        const params = new URLSearchParams({ symbol, start_date: startDate, end_date: endDate });
+        const response = await fetch(`${API}/api/diagonal-expiries?${params.toString()}`);
         if (!response.ok) throw new Error("expiries");
         const data = await response.json();
-        const list: string[] = symbol === "NIFTY"
-          ? data.nifty || []
-          : data.sensex || [];
+        const list: string[] = data.expiries || [];
         setExpiries(list);
         setEarlierExpiry((current) => current && list.includes(current) ? current : list[0] || "");
         setLaterExpiry((current) => current && list.includes(current) ? current : list[1] || list[0] || "");
       } catch {
-        setError("Unable to load expiry data.");
+        setExpiries([]);
+        setEarlierExpiry("");
+        setLaterExpiry("");
+        setError("Unable to load expiry data for the selected range.");
       }
     }
     loadExpiries();
-  }, [startDate, symbol]);
+  }, [startDate, endDate, symbol]);
+
+  useEffect(() => {
+    if (!dates.length || !startDate || !endDate) return;
+    const inRange = dates.filter((d) => startDate <= d && d <= endDate);
+    if (!inRange.length) return;
+    setViewDate((current) => current && inRange.includes(current) ? current : inRange[0]);
+  }, [dates, startDate, endDate]);
 
   function defaultStartStrike(spot: number | null) {
     if (spot === null || !Number.isFinite(spot)) return "";
@@ -2385,8 +2396,8 @@ function DiagonalModule() {
     const peN = Number(peCount);
     const peR = Number(peRatio);
 
-    if (!startDate || !endDate || !earlierExpiry || !laterExpiry) {
-      setError("Select From Date, To Date and both expiries.");
+    if (!startDate || !endDate || !viewDate || !earlierExpiry || !laterExpiry) {
+      setError("Select From Date, To Date, View Date and both expiries.");
       return;
     }
     if (earlierExpiry === laterExpiry) {
@@ -2514,11 +2525,13 @@ function DiagonalModule() {
         </div>
         <div className="strategy-controls-grid">
           <label><span>Symbol</span><select value={symbol} onChange={(e) => setSymbol(e.target.value)}><option>NIFTY</option><option>SENSEX</option></select></label>
-          <DateControl label="From Date" value={startDate} options={dates} onChange={setStartDate} />
-          <DateControl label="To Date" value={endDate} options={dates} onChange={setEndDate} />
+          <DateControl label="From Date (Expiry Search)" value={startDate} options={dates} onChange={setStartDate} />
+          <DateControl label="To Date (Expiry Search)" value={endDate} options={dates} onChange={setEndDate} />
+          <DateControl label="View Date (Data Start)" value={viewDate} options={dates.filter((d) => startDate <= d && d <= endDate)} onChange={setViewDate} />
           <ExpiryControl label="Earlier Expiry" value={earlierExpiry} options={expiries} onChange={setEarlierExpiry} />
           <ExpiryControl label="Later Expiry" value={laterExpiry} options={expiries} onChange={setLaterExpiry} />
         </div>
+        <div className="weekly-note" style={{ marginTop: 12 }}>From/To Date = expiry search range. View Date = first data date. Expiry dropdowns contain all expiries found anywhere inside the selected From/To range.</div>
       </section>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
