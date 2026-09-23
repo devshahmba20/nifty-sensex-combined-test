@@ -2886,15 +2886,89 @@ function StrategyTesterModule() {
       return;
     }
 
-    const headers = Object.keys(displayRows[0]);
+    // Export exactly the columns and values shown in the Strategy Tester table.
+    const headers = mode === "weekly"
+      ? [
+          "COMBINATION",
+          "VIEW FROM",
+          "DATE",
+          "NIFTY EXPIRY",
+          "NIFTY DTE",
+          "NIFTY STRADDLE",
+          "SENSEX EXPIRY",
+          "SENSEX DTE",
+          "SENSEX STRADDLE",
+          "NIFTY × MULTIPLIER",
+          "SPREAD",
+          "VIX",
+        ]
+      : [
+          "DATE",
+          "NIFTY EXPIRY",
+          "NIFTY DTE",
+          "NIFTY STRADDLE",
+          "SENSEX EXPIRY",
+          "SENSEX DTE",
+          "SENSEX STRADDLE",
+          "NIFTY × MULTIPLIER",
+          "SPREAD",
+          "VIX",
+        ];
+
+    function csvValue(row: BacktestRow, header: string): string {
+      const niftyExp = (row as any)["NIFTY Expiry"] || niftyExpiry;
+      const sensexExp = (row as any)["SENSEX Expiry"] || sensexExpiry;
+
+      let value: unknown;
+
+      switch (header) {
+        case "COMBINATION":
+          value = formatCombinationName(sensexExp, niftyExp);
+          break;
+        case "VIEW FROM":
+          value = formatDateForDisplay((row as any)["View From"] || "");
+          break;
+        case "DATE":
+          value = formatDateForDisplay(row.Date);
+          break;
+        case "NIFTY EXPIRY":
+          value = formatDateForDisplay(niftyExp);
+          break;
+        case "NIFTY DTE":
+          value = (row as any)["NIFTY DTE"] ?? daysBetween(row.Date, niftyExp) ?? "—";
+          break;
+        case "NIFTY STRADDLE":
+          value = formatNumber(row["NIFTY Straddle"]);
+          break;
+        case "SENSEX EXPIRY":
+          value = formatDateForDisplay(sensexExp);
+          break;
+        case "SENSEX DTE":
+          value = (row as any)["SENSEX DTE"] ?? daysBetween(row.Date, sensexExp) ?? "—";
+          break;
+        case "SENSEX STRADDLE":
+          value = formatNumber(row["SENSEX Straddle"]);
+          break;
+        case "NIFTY × MULTIPLIER":
+          value = formatNumber(row["Adjusted NIFTY"]);
+          break;
+        case "SPREAD":
+          value = formatNumber(row["Final Value"]);
+          break;
+        case "VIX":
+          value = formatNumber(row["India VIX"]);
+          break;
+        default:
+          value = "";
+      }
+
+      return String(value ?? "").replaceAll('"', '""');
+    }
+
     const csvRows = [
-      headers.map((h) => `"${String(h).replaceAll('"', '""')}"`).join(","),
+      headers.map((h) => `"${h.replaceAll('"', '""')}"`).join(","),
       ...displayRows.map((row) =>
-        headers
-          .map((header) =>
-            `"${String(row[header as keyof BacktestRow] ?? "").replaceAll('"', '""')}"`
-          )
-          .join(",")
+        headers.map((header) => `"${csvValue(row, header)}"`).join(",")
       ),
     ];
 
