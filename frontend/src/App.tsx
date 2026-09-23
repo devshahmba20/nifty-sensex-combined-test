@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
 const AUDIT_CSS = `
@@ -1518,13 +1518,17 @@ setSensexExpiry((current) =>
                                 type="checkbox"
                                 checked={checked}
                                 onChange={() => {
-const nextColumns: BacktestDisplayColumn[] = checked
-  ? visibleBacktestColumns.filter(
-      (key: BacktestDisplayColumn) => key !== column.key
-    )
-  : [...visibleBacktestColumns, column.key];
-
-setVisibleBacktestColumns(nextColumns);                                }}
+                                  const nextColumns: BacktestDisplayColumn[] = checked
+                                    ? visibleBacktestColumns.filter(
+                                        (key: BacktestDisplayColumn) =>
+                                          key !== column.key
+                                      )
+                                    : [
+                                        ...visibleBacktestColumns,
+                                        column.key,
+                                      ];
+                                  setVisibleBacktestColumns(nextColumns);
+                                }}
                               />
                               <span>
                                 {column.key === "adjusted_nifty"
@@ -2306,11 +2310,6 @@ function StrategyPage({
 }
 
 
-function roundStrikeForUi(spot: number, symbol: string) {
-  const step = symbol === "SENSEX" ? 100 : 50;
-  return Math.round(Number(spot) / step) * step;
-}
-
 function CalendarModule() {
   type CalendarRow = {
     Date: string;
@@ -2355,7 +2354,6 @@ function CalendarModule() {
   const [viewSpot, setViewSpot] = useState<number | null>(null);
   const [viewVix, setViewVix] = useState<number | null>(null);
   const [viewSnapshots, setViewSnapshots] = useState<ExpirySnapshot[]>([]);
-  const [dateSnapshots, setDateSnapshots] = useState<Record<string, { spot: number | null; india_vix: number | null; earlier: ExpirySnapshot | null; later: ExpirySnapshot | null }>>({});
   const [loading, setLoading] = useState(false);
   const [loadingSetup, setLoadingSetup] = useState(false);
   const [error, setError] = useState("");
@@ -2366,51 +2364,6 @@ function CalendarModule() {
   const [gap, setGap] = useState(6);
   const [compactTable, setCompactTable] = useState(false);
   const [autoFit, setAutoFit] = useState(true);
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(["Earlier", "Later", "Ratio", "Value"]);
-  const [defaultsSaved, setDefaultsSaved] = useState(false);
-  const [highlightHighestSpread, setHighlightHighestSpread] = useState(false);
-
-  // Keep the date columns aligned across Snapshot, CE and PE tables.
-  // Scrolling any one horizontal table moves the other two to the same date.
-  const calendarScrollRefs = useRef<Record<string, HTMLDivElement | null>>({ snapshot: null, CE: null, PE: null });
-  const syncCalendarScroll = (source: string) => {
-    const left = calendarScrollRefs.current[source]?.scrollLeft ?? 0;
-    Object.entries(calendarScrollRefs.current).forEach(([key, el]) => {
-      if (key !== source && el && Math.abs(el.scrollLeft - left) > 1) el.scrollLeft = left;
-    });
-  };
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("optionsLab.calendar.tableDefaults.v1");
-      if (!raw) return;
-      const d = JSON.parse(raw);
-      if (Array.isArray(d.visibleColumns) && d.visibleColumns.length) setVisibleColumns(d.visibleColumns);
-      if (Number.isFinite(d.headerSize)) setHeaderSize(d.headerSize);
-      if (Number.isFinite(d.dataSize)) setDataSize(d.dataSize);
-      if (typeof d.headerColor === "string") setHeaderColor(d.headerColor);
-      if (typeof d.dataColor === "string") setDataColor(d.dataColor);
-      if (Number.isFinite(d.gap)) setGap(d.gap);
-      if (typeof d.compactTable === "boolean") setCompactTable(d.compactTable);
-      if (typeof d.autoFit === "boolean") setAutoFit(d.autoFit);
-      if (typeof d.highlightHighestSpread === "boolean") setHighlightHighestSpread(d.highlightHighestSpread);
-    } catch { /* ignore invalid saved defaults */ }
-  }, []);
-
-  const saveTableDefaults = () => {
-    localStorage.setItem("optionsLab.calendar.tableDefaults.v1", JSON.stringify({
-      visibleColumns, headerSize, dataSize, headerColor, dataColor, gap, compactTable, autoFit, highlightHighestSpread
-    }));
-    setDefaultsSaved(true);
-    window.setTimeout(() => setDefaultsSaved(false), 1600);
-  };
-
-  const toggleVisibleColumn = (name: string) => {
-    setVisibleColumns((current) => current.includes(name)
-      ? current.filter((x) => x !== name)
-      : [...current, name]
-    );
-  };
 
   useEffect(() => {
     fetch(`${API}/api/dates`)
@@ -2434,12 +2387,25 @@ function CalendarModule() {
     [dates, startDate, endDate]
   );
 
+  useEffect(() => {
+    if (!viewDate && rangeDates.length) {
+      setViewDate(rangeDates[0]);
+    } else if (viewDate && rangeDates.length && !rangeDates.includes(viewDate)) {
+      setViewDate(rangeDates[0]);
+    }
+  }, [rangeDates, viewDate]);
+
   const loadCalendarSetup = async () => {
     if (!startDate || !endDate || startDate > endDate) return;
     setLoadingSetup(true);
     setError("");
     try {
-      const params = new URLSearchParams({ start_date: startDate, end_date: endDate, symbol });
+      const params = new URLSearchParams({
+        start_date: startDate,
+        end_date: endDate,
+        symbol,
+        view_date: viewDate,
+      });
       const response = await fetch(`${API}/api/calendar-expiries?${params.toString()}`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Cannot load expiries.");
@@ -2457,7 +2423,7 @@ function CalendarModule() {
   useEffect(() => {
     if (startDate && endDate) loadCalendarSetup();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, symbol]);
+  }, [startDate, endDate, symbol, viewDate]);
 
   const filteredLater = useMemo(
     () => expiries.filter((e) => !earlierExpiry || e > earlierExpiry),
@@ -2491,33 +2457,6 @@ function CalendarModule() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewDate, symbol, earlierExpiry, laterExpiry]);
 
-  useEffect(() => {
-    if (strikeMode === "AUTO ATM" && viewSpot != null && Number.isFinite(Number(viewSpot))) {
-      setStartStrike(String(roundStrikeForUi(Number(viewSpot), symbol)));
-    }
-  }, [strikeMode, viewSpot, symbol]);
-
-  const loadDateSnapshots = async (resultDates: string[]) => {
-    if (!resultDates.length || !earlierExpiry || !laterExpiry) { setDateSnapshots({}); return; }
-    try {
-      const uniqueDates = Array.from(new Set(resultDates)).sort();
-      const entries = await Promise.all(uniqueDates.map(async (date) => {
-        const params = new URLSearchParams({ date, symbol, earlier_expiry: earlierExpiry, later_expiry: laterExpiry });
-        const response = await fetch(`${API}/api/calendar-view?${params.toString()}`);
-        if (!response.ok) return [date, { spot: null, india_vix: null, earlier: null, later: null }] as const;
-        const data = await response.json();
-        const snaps: ExpirySnapshot[] = Array.isArray(data.expiries) ? data.expiries : [];
-        return [date, {
-          spot: data.spot ?? null,
-          india_vix: data.india_vix ?? null,
-          earlier: snaps.find((x) => x.expiry === earlierExpiry) || null,
-          later: snaps.find((x) => x.expiry === laterExpiry) || null,
-        }] as const;
-      }));
-      setDateSnapshots(Object.fromEntries(entries));
-    } catch { setDateSnapshots({}); }
-  };
-
   const runCalendar = async () => {
     setError("");
     setRows([]);
@@ -2545,30 +2484,16 @@ function CalendarModule() {
         symbol,
         earlier_expiry: earlierExpiry,
         later_expiry: laterExpiry,
-        // Strike count means strikes on EACH side of the selected centre strike.
-        // Example: 10 => 10 below + centre + 10 above = 21 total strikes.
-        start_strike: (() => {
-          const gapValue = Number(strikeGap || 100);
-          const eachSide = Math.max(0, Number(strikeCount || 10));
-          const centre = strikeMode === "AUTO ATM"
-            ? Number(viewSpot != null ? roundStrikeForUi(viewSpot, symbol) : 0)
-            : Number(startStrike || 0);
-          return String(centre - eachSide * gapValue);
-        })(),
+        start_strike: strikeMode === "AUTO ATM" ? "0" : (startStrike || "0"),
         strike_gap: strikeGap || "100",
-        strike_count: String(Math.max(1, Number(strikeCount || 10) * 2 + 1)),
+        strike_count: strikeCount || "10",
         view_date: viewDate,
       });
       const response = await fetch(`${API}/api/calendar?${params.toString()}`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Calendar calculation failed.");
-      const resultRows = Array.isArray(data.rows) ? data.rows : [];
-      setRows(resultRows);
-      const snapshotDates: string[] = Array.from(
-  new Set<string>(resultRows.map((r: CalendarRow) => r.Date))
-).sort();
-
-await loadDateSnapshots(snapshotDates);
+      setRows(Array.isArray(data.rows) ? data.rows : []);
+      if (strikeMode === "AUTO ATM" && data.start_strike != null) setStartStrike(String(data.start_strike));
       await loadViewDate();
       if (!data.rows?.length) setError("No calendar data found from View Date for the selected strikes/expiries.");
     } catch (e) {
@@ -2595,74 +2520,8 @@ await loadDateSnapshots(snapshotDates);
   const highest = rows.length ? Math.max(...rows.map((r) => r["Calendar Value"] ?? -Infinity)) : null;
   const lowest = rows.length ? Math.min(...rows.map((r) => r["Calendar Value"] ?? Infinity)) : null;
 
-  // Highest spread is calculated independently for EACH DATE and EACH OPTION TYPE.
-  // This is intentionally not the highest value across the whole table.
-  const highestSpreadByDateType = useMemo(() => {
-    const out: Record<string, Record<string, number>> = { CE: {}, PE: {} };
-    (rows || []).forEach((r) => {
-      const type = r["Option Type"] as "CE" | "PE";
-      const date = r.Date;
-      const value = Number(r["Calendar Value"]);
-      if ((type === "CE" || type === "PE") && date && Number.isFinite(value)) {
-        const previous = out[type][date];
-        if (previous == null || value > previous) out[type][date] = value;
-      }
-    });
-    return out;
-  }, [rows]);
-
   const selectedEarlier = viewSnapshots.find((x) => x.expiry === earlierExpiry);
   const selectedLater = viewSnapshots.find((x) => x.expiry === laterExpiry);
-
-  const renderDateSnapshotTable = () => {
-    const snapshotDates = datesInResult.filter((d) => dateSnapshots[d]);
-    if (!snapshotDates.length) return null;
-    const metricRows: { label: string; get: (d: string) => number | null | undefined; kind?: "spread" }[] = [
-      { label: "India VIX", get: (d) => dateSnapshots[d]?.india_vix },
-      { label: "Spot", get: (d) => dateSnapshots[d]?.spot },
-      { label: `${formatDateForDisplay(earlierExpiry)} Synthetic Future`, get: (d) => dateSnapshots[d]?.earlier?.synthetic_future },
-      { label: `${formatDateForDisplay(earlierExpiry)} Straddle`, get: (d) => dateSnapshots[d]?.earlier?.straddle },
-      { label: `${formatDateForDisplay(laterExpiry)} Synthetic Future`, get: (d) => dateSnapshots[d]?.later?.synthetic_future },
-      { label: `${formatDateForDisplay(laterExpiry)} Straddle`, get: (d) => dateSnapshots[d]?.later?.straddle },
-      { label: "Straddle Spread (Later − Earlier)", get: (d) => {
-        const a = dateSnapshots[d]?.earlier?.straddle; const b = dateSnapshots[d]?.later?.straddle;
-        return a != null && b != null ? b - a : null;
-      }, kind: "spread" },
-    ];
-    const spreadValues = snapshotDates.map((d) => {
-      const a = dateSnapshots[d]?.earlier?.straddle; const b = dateSnapshots[d]?.later?.straddle;
-      return a != null && b != null ? b - a : null;
-    }).filter((v): v is number => v != null && Number.isFinite(v));
-    const maxSpread = spreadValues.length ? Math.max(...spreadValues) : null;
-    return (
-      <section className={`panel calendar-date-snapshot ${autoFit ? "strategy-table-autofit" : ""} ${compactTable ? "strategy-table-compact" : ""}`} style={{
-        ["--calendar-header-size" as string]: `${headerSize}px`, ["--calendar-data-size" as string]: `${dataSize}px`,
-        ["--calendar-header-color" as string]: headerColor === "auto" ? undefined : headerColor,
-        ["--calendar-data-color" as string]: dataColor === "auto" ? undefined : dataColor,
-        ["--calendar-table-gap" as string]: `${gap}px`,
-      } as React.CSSProperties}>
-        <div className="panel-header strategy-results-header"><div><div className="panel-kicker">DATE-WISE MARKET SNAPSHOT</div><h2>Spot / VIX / Synthetic Future / Straddle</h2><small>{snapshotDates.length} dates · selected expiry pair fixed</small></div></div>
-        <div className="table-wrapper calendar-date-snapshot-wrapper" ref={(el) => { calendarScrollRefs.current.snapshot = el; }} onScroll={() => syncCalendarScroll("snapshot")}>
-          <table className="calendar-horizontal-table"><thead><tr><th>Metric</th>{snapshotDates.map((d) => <th key={d}>{formatDateForDisplay(d)}</th>)}</tr></thead>
-          <tbody>{metricRows.map((row) => <tr key={row.label}><th>{row.label}</th>{snapshotDates.map((d, idx) => {
-            const value = row.get(d);
-            const isHighest = highlightHighestSpread && row.kind === "spread" && maxSpread != null && value != null && Math.abs(value - maxSpread) < 1e-9;
-            let marketClass = "";
-            // Spot and India VIX are compared with the previous available trading date.
-            // Higher = green, lower = red, unchanged = default.
-            if ((row.label === "Spot" || row.label === "India VIX") && value != null && idx > 0) {
-              const prev = row.get(snapshotDates[idx - 1]);
-              if (prev != null && Number.isFinite(Number(prev)) && Number.isFinite(Number(value))) {
-                if (Number(value) > Number(prev)) marketClass = "market-up";
-                else if (Number(value) < Number(prev)) marketClass = "market-down";
-              }
-            }
-            return <td key={d} className={`${isHighest ? "calendar-highest-cell " : ""}${marketClass}`}>{formatNumber(value)}</td>;
-          })}</tr>)}</tbody></table>
-        </div>
-      </section>
-    );
-  };
 
   const renderHorizontalTable = (type: "CE" | "PE", title: string, tone: string) => (
     <section className={`panel calendar-results ${autoFit ? "strategy-table-autofit" : ""} ${compactTable ? "strategy-table-compact" : ""}`} style={{
@@ -2677,32 +2536,22 @@ await loadDateSnapshots(snapshotDates);
         <div className="strategy-results-tools">
           <span className="table-tool-label">Header</span><input className="strategy-table-size-input" type="number" min="8" max="30" value={headerSize} onChange={(e) => setHeaderSize(Math.min(30, Math.max(8, Number(e.target.value) || 8)))} />
           <span className="table-tool-label">Data</span><input className="strategy-table-size-input" type="number" min="8" max="30" value={dataSize} onChange={(e) => setDataSize(Math.min(30, Math.max(8, Number(e.target.value) || 8)))} />
-          <span className="table-tool-label">H Color</span><select className="strategy-table-color-select" value={headerColor} onChange={(e) => setHeaderColor(e.target.value)}><option value="auto">Auto</option><option value="#e2e8f0">Soft White</option><option value="#cbd5e1">Slate</option><option value="#93c5fd">Blue</option><option value="#c4b5fd">Indigo</option><option value="#ffffff">White</option></select>
-          <span className="table-tool-label">D Color</span><select className="strategy-table-color-select" value={dataColor} onChange={(e) => setDataColor(e.target.value)}><option value="auto">Auto</option><option value="#e2e8f0">Soft White</option><option value="#cbd5e1">Slate</option><option value="#93c5fd">Blue</option><option value="#c4b5fd">Indigo</option><option value="#ffffff">White</option></select>
+          <span className="table-tool-label">H Color</span><select className="strategy-table-color-select" value={headerColor} onChange={(e) => setHeaderColor(e.target.value)}><option value="auto">Auto</option><option value="#334155">Slate</option><option value="#2563eb">Blue</option><option value="#4f46e5">Indigo</option><option value="#ffffff">White</option></select>
+          <span className="table-tool-label">D Color</span><select className="strategy-table-color-select" value={dataColor} onChange={(e) => setDataColor(e.target.value)}><option value="auto">Auto</option><option value="#334155">Slate</option><option value="#2563eb">Blue</option><option value="#4f46e5">Indigo</option><option value="#ffffff">White</option></select>
           <span className="table-tool-label">Gap</span><input className="strategy-table-gap-input" type="number" min="0" max="24" value={gap} onChange={(e) => setGap(Math.min(24, Math.max(0, Number(e.target.value) || 0)))} />
           <button className={`table-tool-button ${compactTable ? "selected" : ""}`} onClick={() => setCompactTable((v) => !v)}>{compactTable ? "✓ Compact" : "Compact"}</button>
           <button className={`table-tool-button ${autoFit ? "selected" : ""}`} onClick={() => setAutoFit((v) => !v)}>{autoFit ? "✓ Auto Fit" : "Auto Fit"}</button>
-          <button className={`table-tool-button ${highlightHighestSpread ? "selected" : ""}`} onClick={() => setHighlightHighestSpread((v) => !v)}>{highlightHighestSpread ? "✓ Highest Spread" : "Highest Spread"}</button>
-          <button className={`table-tool-button ${defaultsSaved ? "selected" : ""}`} onClick={saveTableDefaults}>{defaultsSaved ? "✓ Saved" : "Save as Default"}</button>
-          <details className="calendar-columns-menu">
-            <summary className="table-tool-button">Columns</summary>
-            <div className="calendar-columns-popover">
-              {["Earlier", "Later", "Ratio", "Value"].map((name) => (
-                <label key={name}><input type="checkbox" checked={visibleColumns.includes(name)} onChange={() => toggleVisibleColumn(name)} /> {name === "Value" ? "Calendar Value" : name === "Earlier" ? "Earlier Premium" : name === "Later" ? "Later Premium" : "Ratio"}</label>
-              ))}
-            </div>
-          </details>
         </div>
       </div>
-      <div className="table-wrapper" ref={(el) => { calendarScrollRefs.current[type] = el; }} onScroll={() => syncCalendarScroll(type)}>
+      <div className="table-wrapper">
         <table className="calendar-horizontal-table">
           <thead>
             <tr>
               <th rowSpan={2} className="strike-head">STRIKE</th>
-              {datesInResult.map((d) => <th key={d} colSpan={visibleColumns.length} className="date-head">{formatDateForDisplay(d)}</th>)}
+              {datesInResult.map((d) => <th key={d} colSpan={4} className="date-head">{formatDateForDisplay(d)}</th>)}
             </tr>
             <tr>
-              {datesInResult.flatMap((d) => visibleColumns.map((x) => <th key={`${d}-${x}`} className="sub-head">{x === "Value" ? "Value" : x}</th>))}
+              {datesInResult.flatMap((d) => ["Earlier", "Later", "Ratio", "Value"].map((x) => <th key={`${d}-${x}`} className="sub-head">{x}</th>))}
             </tr>
           </thead>
           <tbody>
@@ -2711,19 +2560,12 @@ await loadDateSnapshots(snapshotDates);
                 <td className="strike-cell">{formatNumber(strike, 0)}</td>
                 {datesInResult.flatMap((d) => {
                   const r = findRow(type, strike, d);
-                  const cells: React.ReactNode[] = [];
-                  visibleColumns.forEach((col) => {
-                    if (col === "Earlier") cells.push(<td key={`${d}-e`}>{formatNumber(r?.["Earlier Premium"])}</td>);
-                    if (col === "Later") cells.push(<td key={`${d}-l`}>{formatNumber(r?.["Later Premium"])}</td>);
-                    if (col === "Ratio") cells.push(<td key={`${d}-r`}>{formatNumber(r?.Ratio)}</td>);
-                    if (col === "Value") {
-                      const currentValue = r?.["Calendar Value"];
-                      const dateHighest = highestSpreadByDateType[type]?.[d];
-                      const isHighest = highlightHighestSpread && currentValue != null && dateHighest != null && Math.abs(Number(currentValue) - Number(dateHighest)) < 1e-9;
-                      cells.push(<td key={`${d}-v`} className={`${(currentValue ?? 0) >= 0 ? "positive" : "negative"} ${isHighest ? "highest-spread" : ""}`}>{formatNumber(currentValue)}</td>);
-                    }
-                  });
-                  return cells;
+                  return [
+                    <td key={`${d}-e`}>{formatNumber(r?.["Earlier Premium"])}</td>,
+                    <td key={`${d}-l`}>{formatNumber(r?.["Later Premium"])}</td>,
+                    <td key={`${d}-r`}>{formatNumber(r?.Ratio)}</td>,
+                    <td key={`${d}-v`} className={(r?.["Calendar Value"] ?? 0) >= 0 ? "positive" : "negative"}>{formatNumber(r?.["Calendar Value"])}</td>,
+                  ];
                 })}
               </tr>
             ))}
@@ -2758,8 +2600,6 @@ await loadDateSnapshots(snapshotDates);
         .calendar-v2 .calendar-stat span { display:block; font-size:9px; color:#94a3b8; text-transform:uppercase; letter-spacing:.06em; }
         .calendar-v2 .calendar-stat b { display:block; margin-top:5px; font-size:18px; color:#e5e7eb; }
         .calendar-v2 .calendar-results .table-wrapper { overflow-x:auto; margin-top:8px; }
-        .calendar-v2 .calendar-date-snapshot-wrapper { scrollbar-color:#64748b transparent; }
-        .calendar-v2 .calendar-results .table-wrapper { scrollbar-color:#64748b transparent; }
         .calendar-v2 .calendar-horizontal-table { width:max-content; min-width:100%; border-collapse:collapse; table-layout:auto; }
         .calendar-v2 .calendar-horizontal-table th,.calendar-v2 .calendar-horizontal-table td { white-space:nowrap; text-align:center; border-bottom:1px solid #1f2937; padding:7px var(--calendar-table-gap,6px); }
         .calendar-v2 .calendar-horizontal-table th { color:var(--calendar-header-color,#94a3b8) !important; font-size:var(--calendar-header-size,10px); }
@@ -2770,115 +2610,7 @@ await loadDateSnapshots(snapshotDates);
         .calendar-v2 .calendar-horizontal-table .strike-cell { font-size:var(--calendar-data-size,10px); }
         .calendar-v2 .calendar-horizontal-table td.positive { color:#86efac !important; }
         .calendar-v2 .calendar-horizontal-table td.negative { color:#fca5a5 !important; }
-        .calendar-v2 .calendar-horizontal-table td.highest-spread { background:rgba(250,204,21,.30) !important; color:#111827 !important; font-weight:900 !important; box-shadow:inset 0 0 0 2px rgba(234,179,8,.75); }
-        .calendar-columns-menu { position:relative; display:inline-block; }
-        .calendar-columns-menu summary { list-style:none; cursor:pointer; }
-        .calendar-columns-menu summary::-webkit-details-marker { display:none; }
-        .calendar-columns-popover { position:absolute; right:0; top:calc(100% + 6px); z-index:30; min-width:190px; padding:10px; border:1px solid #334155; border-radius:10px; background:#0f172a; box-shadow:0 14px 35px rgba(0,0,0,.35); }
-        .calendar-columns-popover label { display:block; padding:5px 4px; color:#e2e8f0; font-size:11px; white-space:nowrap; }
-        .calendar-columns-popover input { accent-color:#6366f1; }
         .calendar-v2 .calendar-results.strategy-table-compact .calendar-horizontal-table th,.calendar-v2 .calendar-results.strategy-table-compact .calendar-horizontal-table td { padding-top:4px; padding-bottom:4px; }
-                 .calendar-v2 .calendar-date-snapshot-wrapper { overflow-x:auto; }
-         .calendar-v2 .calendar-date-snapshot .calendar-horizontal-table { min-width:max-content; }
-         .calendar-v2 .calendar-date-snapshot .calendar-horizontal-table th:first-child { position:sticky; left:0; z-index:3; background:#0f172a; min-width:220px; text-align:left; }
-         .calendar-v2 .calendar-results .calendar-horizontal-table .strike-head,
-         .calendar-v2 .calendar-results .calendar-horizontal-table .strike-cell { min-width:220px; width:220px; box-sizing:border-box; }
-         .calendar-v2 .calendar-date-snapshot .calendar-highest-cell { background:#fde68a !important; color:#111827 !important; font-weight:800 !important; }
-         .calendar-v2 .calendar-date-snapshot .market-up { color:#16a34a !important; font-weight:800 !important; }
-         .calendar-v2 .calendar-date-snapshot .market-down { color:#dc2626 !important; font-weight:800 !important; }
-         .calendar-v2 .calendar-date-snapshot .market-up.calendar-highest-cell,
-         .calendar-v2 .calendar-date-snapshot .market-down.calendar-highest-cell { color:#111827 !important; }
-
-        /* FINAL THEME-SAFE CALENDAR VISUALS */
-        .calendar-v2 .calendar-run {
-          min-width:138px;
-          height:42px;
-          padding:0 18px;
-          border:1px solid rgba(129,140,248,.75);
-          border-radius:11px;
-          background:linear-gradient(135deg,#6366f1,#4f46e5);
-          color:#fff !important;
-          font-size:12px;
-          font-weight:900;
-          letter-spacing:.01em;
-          cursor:pointer;
-          box-shadow:0 8px 20px rgba(79,70,229,.28), inset 0 1px 0 rgba(255,255,255,.18);
-          transition:transform .15s ease, box-shadow .15s ease, opacity .15s ease;
-        }
-        .calendar-v2 .calendar-run:hover:not(:disabled) {
-          transform:translateY(-1px);
-          box-shadow:0 11px 24px rgba(79,70,229,.36), inset 0 1px 0 rgba(255,255,255,.2);
-        }
-        .calendar-v2 .calendar-run:active:not(:disabled) { transform:translateY(0); }
-        .calendar-v2 .calendar-run:disabled { opacity:.6; cursor:not-allowed; }
-
-        /* Keep all calendar controls readable in every theme. */
-        .calendar-v2 .calendar-setup-grid select,
-        .calendar-v2 .calendar-setup-grid input,
-        .calendar-v2 .calendar-mode-row input,
-        .calendar-v2 .strategy-table-size-input,
-        .calendar-v2 .strategy-table-gap-input,
-        .calendar-v2 .strategy-table-color-select {
-          color-scheme:dark;
-        }
-        .app.theme-light .calendar-v2 .calendar-setup-grid select,
-        .app.theme-light .calendar-v2 .calendar-setup-grid input,
-        .app.theme-light .calendar-v2 .calendar-mode-row input,
-        .app.theme-light .calendar-v2 .strategy-table-size-input,
-        .app.theme-light .calendar-v2 .strategy-table-gap-input,
-        .app.theme-light .calendar-v2 .strategy-table-color-select {
-          background:#fff !important;
-          color:#172033 !important;
-          border-color:#cbd5e1 !important;
-          color-scheme:light;
-        }
-        .app.theme-light .calendar-v2 .calendar-setup-grid select option,
-        .app.theme-light .calendar-v2 .strategy-table-color-select option { background:#fff; color:#172033; }
-
-        /* Auto font colors are theme-safe; manually selected colors still work. */
-        .app:not(.theme-light) .calendar-v2 .calendar-horizontal-table th { color:var(--calendar-header-color,#cbd5e1) !important; }
-        .app:not(.theme-light) .calendar-v2 .calendar-horizontal-table td { color:var(--calendar-data-color,#e2e8f0) !important; }
-        .app.theme-light .calendar-v2 .calendar-horizontal-table th { color:var(--calendar-header-color,#475569) !important; }
-        .app.theme-light .calendar-v2 .calendar-horizontal-table td { color:var(--calendar-data-color,#334155) !important; }
-        .app:not(.theme-light) .calendar-v2 .calendar-horizontal-table td.positive { color:#86efac !important; }
-        .app:not(.theme-light) .calendar-v2 .calendar-horizontal-table td.negative { color:#fca5a5 !important; }
-        .app.theme-light .calendar-v2 .calendar-horizontal-table td.positive { color:#15803d !important; }
-        .app.theme-light .calendar-v2 .calendar-horizontal-table td.negative { color:#dc2626 !important; }
-
-        /* Spot/VIX movement: previous available trading day comparison. */
-        .app:not(.theme-light) .calendar-v2 .calendar-date-snapshot .market-up { color:#4ade80 !important; font-weight:900 !important; }
-        .app:not(.theme-light) .calendar-v2 .calendar-date-snapshot .market-down { color:#f87171 !important; font-weight:900 !important; }
-        .app.theme-light .calendar-v2 .calendar-date-snapshot .market-up { color:#15803d !important; font-weight:900 !important; }
-        .app.theme-light .calendar-v2 .calendar-date-snapshot .market-down { color:#dc2626 !important; font-weight:900 !important; }
-
-        /* Highest Spread highlight is ONLY for the per-date CE/PE Value cell. */
-        .calendar-v2 .calendar-horizontal-table td.highest-spread {
-          background:#fde68a !important;
-          color:#111827 !important;
-          font-weight:900 !important;
-          box-shadow:inset 0 0 0 2px #eab308;
-        }
-        .calendar-v2 .calendar-date-snapshot .calendar-highest-cell { background:transparent !important; box-shadow:none !important; color:inherit !important; }
-
-        /* Same-width first column keeps dates aligned between snapshot, CE and PE. */
-        .calendar-v2 .calendar-date-snapshot .calendar-horizontal-table th:first-child,
-        .calendar-v2 .calendar-results .calendar-horizontal-table .strike-head,
-        .calendar-v2 .calendar-results .calendar-horizontal-table .strike-cell {
-          min-width:220px;
-          width:220px;
-          box-sizing:border-box;
-        }
-        .calendar-v2 .calendar-date-snapshot .calendar-horizontal-table { min-width:max-content; }
-        .calendar-v2 .calendar-results .calendar-horizontal-table { min-width:max-content; }
-
-        /* Make the table tools consistent across themes. */
-        .app.theme-light .calendar-v2 .strategy-results-tools .table-tool-label { color:#64748b !important; }
-        .app:not(.theme-light) .calendar-v2 .strategy-results-tools .table-tool-label { color:#94a3b8 !important; }
-        .app.theme-light .calendar-v2 .table-tool-button,
-        .app.theme-light .calendar-v2 .strategy-results-tools button { color:#334155; background:#fff; border-color:#cbd5e1; }
-        .app.theme-light .calendar-v2 .table-tool-button.selected { color:#4338ca; background:#eef2ff; border-color:#6366f1; }
-        .app:not(.theme-light) .calendar-v2 .table-tool-button.selected { color:#c7d2fe !important; background:#27235f !important; border-color:#6366f1 !important; }
-
         @media(max-width:1100px){ .calendar-v2 .calendar-setup-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.calendar-v2 .calendar-snapshot-grid{grid-template-columns:1fr;}.calendar-v2 .calendar-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
         @media(max-width:600px){ .calendar-v2 .calendar-setup-grid,.calendar-v2 .calendar-stat-grid{grid-template-columns:1fr;} .calendar-v2 .calendar-snapshot .snap-grid{grid-template-columns:1fr;} }
       `}</style>
@@ -2888,7 +2620,7 @@ await loadDateSnapshots(snapshotDates);
           <div>
             <div className="panel-kicker">CALENDAR STRATEGY</div>
             <h2>Calendar Setup</h2>
-            <p><b>From/To Date = expiry search range.</b> <b>View Date = data start date.</b> The selected expiry pair stays fixed; table data runs from View Date up to the earlier expiry (or To Date if earlier).</p>
+            <p><b>From/To Date = expiry search range.</b> <b>View Date = data start date.</b> From/To find valid expiries. View Date is the FIRST result date. Expiries are limited to contracts having data on View Date. The table runs from View Date through the earlier expiry.</p>
           </div>
           <button className="calendar-run" onClick={runCalendar} disabled={loading || loadingSetup}>{loading ? "Running…" : "▶ Run Calendar"}</button>
         </div>
@@ -2909,11 +2641,10 @@ await loadDateSnapshots(snapshotDates);
           <button className={strikeMode === "AUTO ATM" ? "selected" : ""} onClick={() => setStrikeMode("AUTO ATM")}>AUTO ATM</button>
           <button className={strikeMode === "MANUAL" ? "selected" : ""} onClick={() => setStrikeMode("MANUAL")}>MANUAL</button>
           <input aria-label="Start Strike" type="number" value={startStrike} disabled={strikeMode !== "MANUAL"} placeholder={viewSpot != null ? `ATM ${formatNumber(viewSpot,0)}` : "Start Strike"} onChange={(e) => setStartStrike(e.target.value)} />
-          <span style={{fontSize:10,opacity:.62}}>Selected strike = centre. {strikeCount || 10} strikes above + {strikeCount || 10} below + centre.</span>
-          <span style={{fontSize:10,opacity:.62}}>The selected strike is the centre: N strikes above + centre + N strikes below.</span>
+          <span style={{fontSize:10,opacity:.62}}>Rows start exactly from this strike, then Gap × Number of Strikes.</span>
         </div>
 
-        <div className="calendar-note"><b>Important:</b> View Date is now the <b>first date of the result table</b>. From/To are used only to find all expiry choices. Snapshot, CE and PE use the same date columns and synchronized horizontal scrolling. Each date has Earlier Premium, Later Premium, Ratio and Calendar Value.</div>
+        <div className="calendar-note"><b>Important:</b> View Date is now the <b>first date of the result table</b>. From/To are used only to find all expiry choices. CE and PE are displayed as separate horizontal strike-by-date tables. Each date has Earlier Premium, Later Premium, Ratio and Calendar Value.</div>
         {error && <div className="strategy-error">{error}</div>}
       </section>
 
@@ -2950,7 +2681,6 @@ await loadDateSnapshots(snapshotDates);
       </section>
 
       {rows.length > 0 && <>
-        {renderDateSnapshotTable()}
         {renderHorizontalTable("CE", "CALL / CE CALENDAR", "CE SECTION — STRIKE × DATE")}
         {renderHorizontalTable("PE", "PUT / PE CALENDAR", "PE SECTION — STRIKE × DATE")}
       </>}
@@ -3149,6 +2879,42 @@ function StrategyTesterModule() {
   const weeklyHigh = weeklyValues.length ? Math.max(...weeklyValues) : null;
   const weeklyLow = weeklyValues.length ? Math.min(...weeklyValues) : null;
   const displayRows = mode === "weekly" ? weeklyRows : (backtest?.rows || []);
+
+  function exportStrategyCSV() {
+    if (!displayRows.length) {
+      setError("Run the test first before downloading the result.");
+      return;
+    }
+
+    const headers = Object.keys(displayRows[0]);
+    const csvRows = [
+      headers.map((h) => `"${String(h).replaceAll('"', '""')}"`).join(","),
+      ...displayRows.map((row) =>
+        headers
+          .map((header) =>
+            `"${String(row[header as keyof BacktestRow] ?? "").replaceAll('"', '""')}"`
+          )
+          .join(",")
+      ),
+    ];
+
+    const blob = new Blob(
+      ["\ufeff" + csvRows.join("\r\n")],
+      { type: "text/csv;charset=utf-8;" }
+    );
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download =
+      mode === "weekly"
+        ? `weekly_strategy_${month || "result"}.csv`
+        : `custom_strategy_${startDate || "start"}_${endDate || "end"}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="strategy-page">
@@ -3362,6 +3128,14 @@ function StrategyTesterModule() {
               <input className="strategy-table-gap-input" type="number" min="0" max="24" step="1" value={strategyTableGap} onChange={(e) => setStrategyTableGap(Math.min(24, Math.max(0, Number(e.target.value) || 0)))} title="Table cell padding" />
               <button type="button" className={`table-tool-button ${strategyTableCompact ? "selected" : ""}`} onClick={() => setStrategyTableCompact((v) => !v)}>{strategyTableCompact ? "✓ Compact" : "Compact"}</button>
               <button type="button" className={`table-tool-button ${strategyTableAutoFit ? "selected" : ""}`} onClick={() => setStrategyTableAutoFit((v) => !v)} title="Fit columns to content without changing font size">{strategyTableAutoFit ? "✓ Auto Fit" : "Auto Fit"}</button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={exportStrategyCSV}
+                title="Download the current Strategy Tester result as CSV"
+              >
+                ⬇ Download CSV
+              </button>
               <span className="audit-badge">{displayRows.length} rows</span>
             </div>
           </div>
